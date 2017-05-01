@@ -6,7 +6,8 @@ Currently, the main changes include:
 Rejection of broadcast probes (considered uninteresting)  
 Addition of the SPI file system for logging captured packets  
 printPacket function to view captured packets  
-stringToChar and uniqueString functions for performing string compares  
+stringToChar and uniqueString functions for performing string compares
+Outputs hex dump over serial
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.

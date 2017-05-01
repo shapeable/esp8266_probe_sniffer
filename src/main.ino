@@ -8,7 +8,7 @@ extern "C" {
 #define TYPE_CONTROL          0x01
 #define TYPE_DATA             0x02
 #define SUBTYPE_PROBE_REQUEST 0x04
-
+#define SUBTYPE_BEACON        0x08
 
 struct RxControl {
  signed rssi:8; // signal intensity of packet
@@ -44,7 +44,13 @@ struct SnifferPacket{
     uint16_t len;
 };
 
+
 int count = 0;
+int numberOfMACs = 0;
+int probeCount = 0;
+int numberOfInterrupts = 0;
+volatile byte interruptCounter = 0;
+const byte interruptPin = 3;
 
 static void showMetadata(SnifferPacket *snifferPacket) {
 
@@ -58,50 +64,75 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   uint8_t SSID_length  = snifferPacket->data[25];
 
   // Only look for probe request packets
-  if (frameType != TYPE_MANAGEMENT || frameSubType != SUBTYPE_PROBE_REQUEST)
-        return;
-
+  if (frameType != TYPE_MANAGEMENT || frameType != SUBTYPE_PROBE_REQUEST){
+      return;
+  }
   // Filter out broadcast probes
   if(SSID_length == 0){
-     return;
+      return;
   }
 
   //Create and open csv file to append packet
-  File MAClog = SPIFFS.open("/captureMAC.csv", "a+");
-  File SSIDlog = SPIFFS.open("/captureSSID.csv", "a+");
-  if (!MAClog || !SSIDlog){
+  File capture = SPIFFS.open("/captureMACs.csv", "a+");
+  File MAClog = SPIFFS.open("/captureMACs.csv", "a+");
+  //File SSIDlog = SPIFFS.open("/captureSSID.csv", "a+");
+  if (!MAClog){
       Serial.println("files failed to open");
   }
 
-  Serial.print("RSSI: ");
-  Serial.print(snifferPacket->rx_ctrl.rssi, DEC);
+  //Serial.print("RSSI: ");
+  //Serial.print(snifferPacket->rx_ctrl.rssi, DEC);
 
-  Serial.print(" Ch: ");
-  Serial.println(wifi_get_channel());
+  //Serial.print(" Ch: ");
+  //Serial.println(wifi_get_channel());
 
   char addr[] = "00:00:00:00:00:00";
   getMAC(addr, snifferPacket->data, 10);
-  Serial.print("Client MAC: ");
-  Serial.println(addr);
+  //Serial.print("Client MAC: ");
+  //Serial.println(addr);
 
   MAClog.println(addr);
 
-  Serial.print("Target SSID: ");
-  printDataSpan(26, SSID_length, snifferPacket->data);
+  //Serial.print("Target SSID: ");
+  //printDataSpan(26, SSID_length, snifferPacket->data);
   //SSIDlog.println(printDataSpan(26, SSID_length, snifferPacket->data));
+  //Serial.println();
+
+  //Check 2nd byte, 7th bit for encryption
+  //Serial.print("Encryption: ");
+  //Serial.print(snifferPacket->data[2]);
+  //Serial.println();
+  //printPacket(snifferPacket->rx_ctrl);
+  /*Serial.print(snifferPacket->rx_ctrl.rssi, HEX);
+  Serial.print(snifferPacket->rx_ctrl.rate, HEX);
+  Serial.print(snifferPacket->rx_ctrl.is_group, HEX);*/
+
+  /*Serial.print(snifferPacket->rx_ctrl.legacy_length, DEC);
+  Serial.print(" ");
+  Serial.println(snifferPacket->rx_ctrl.HT_length, DEC);
+  Serial.print(" ");*/
+  //Serial.println(len);
+  //for(int i = 0 ; i < 18 ; i++){
+  //printf("%02x ", snifferPacket->rx_ctrl[i]);
+  //Serial.println();
+  //}
+  /*Serial.print(snifferPacket->rx_ctrl.legacy_length);
+  Serial.print(" ");
+  Serial.print(snifferPacket->len);
+  Serial.print(" ");
+  Serial.print(snifferPacket->cnt);
+  Serial.println();*/
+
+  printPacket(snifferPacket->data, snifferPacket->rx_ctrl.legacy_length);
+
   Serial.println();
-
-  Serial.print("Encryption: ");
-  Serial.println(snifferPacket->data[1], BIN);
-
-  printPacket(snifferPacket->data);
   Serial.println();
 
   MAClog.close();
-  SSIDlog.close();
+  //SSIDlog.close();
 
   // Reopen csv to read captured packets
-  MAClog = SPIFFS.open("/captureMAC.csv", "r");
+  MAClog = SPIFFS.open("/captureMACs.csv", "r");
   if(!MAClog){
       Serial.println("file failed to open");
   }
@@ -109,8 +140,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   String s;
   char* entry;
   int addMAC = 1;
-  //Serial.println(addr);
-  //Serial.println();
 
   // unique string function
   while (MAClog.available()) {
@@ -124,11 +153,44 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   if(addMAC == 1){
       count++;
   }
+  /*if(count > 0){
 
-  Serial.println(count);
-  Serial.println();
+    count--;
+    numberOfMACs++;
+
+    Serial.print("Unique MACs: ");
+    Serial.println(numberOfMACs);
+  }*/
+  probeCount++;
+  //Serial.print("Probe Requests Captured: ");
+  //Serial.println(probeCount);
+
+  //Serial.print("Unique MACs: ");
+  //Serial.println(count);
+  //Serial.println();
+
+  /*Serial.print("Interrupts: ");
+  Serial.println(interruptCounter);
+  Serial.println();*/
+  //Dump captured data
+  /*if(interruptCounter > 0){
+      s = MAClog.readStringUntil('\n');
+      entry = stringToChar(s, 16);
+      Serial.print(entry);
+      Serial.print(", ");
+
+  }*/
 
   MAClog.close();
+  //check UART for data
+  /*if(Serial.available())
+  {
+      //size_t len = Serial.available();
+      //uint8_t sbuf[len];
+      //Serial.readBytes(sbuf, len);
+      //Serial.println(sbuf[1]);
+      interruptCounter++;
+   }*/
 }
 
 /**
@@ -150,12 +212,31 @@ static void getMAC(char *addr, uint8_t* data, uint16_t offset) {
                     data[offset+2], data[offset+3], data[offset+4], data[offset+5]);
 }
 
-static void printPacket(uint8_t* data){
-    for(uint16_t i = 0; i < 200; i++) {
+/*static void printPacket(uint8_t* data){
+    for(uint16_t i = 0; i < DATA_LENGTH; i++) {
         printf("%02x", data[i]);
         Serial.print(" ");
         if((i+1)%10 == 0)
             Serial.println();
+    }
+}*/
+
+static void printPacket(uint8_t* data, int length){
+    int j = 0;
+    printf("000%02x  ", j);
+
+    for(uint16_t i = 0; (i < DATA_LENGTH) && (i < length); i++) {
+        j++;
+        printf("%02x ", data[i]);
+        if(j%8 == 0){
+            Serial.print(" ");
+        }
+        if(j%16 == 0){
+            Serial.println();
+            printf("000%02x  ", j);
+        }
+
+
     }
 }
 
@@ -165,6 +246,10 @@ static char* stringToChar(String s, int buffer){
         array[i] = s[i];
     }
     return array;
+}
+
+void handleInterrupt() {
+  interruptCounter++;
 }
 
 #define CHANNEL_HOP_INTERVAL_MS   1000
@@ -189,9 +274,12 @@ void setup() {
 
     //Start serial connection
     Serial.begin(115200);
+    pinMode(interruptPin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, FALLING);
 
     //Format file system
     SPIFFS.begin();
+    Serial.println();
     Serial.println("Please wait 30 secs for SPIFFS to be formatted");
     SPIFFS.format();
     Serial.println("Spiffs formatted");
@@ -214,4 +302,13 @@ void setup() {
 
 void loop() {
     delay(10);
+    if(interruptCounter > 0){
+
+        interruptCounter--;
+        numberOfInterrupts++;
+
+        Serial.print("An interrupt has occurred. Total: ");
+        Serial.println(numberOfInterrupts);
+
+    }
 }
