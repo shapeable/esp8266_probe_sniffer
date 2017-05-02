@@ -64,13 +64,13 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   uint8_t SSID_length  = snifferPacket->data[25];
 
   // Only look for probe request packets
-  if (frameType != TYPE_MANAGEMENT || frameType != SUBTYPE_PROBE_REQUEST){
+  if (frameSubType == SUBTYPE_BEACON){
       return;
   }
   // Filter out broadcast probes
-  if(SSID_length == 0){
+  /*if(SSID_length == 0){
       return;
-  }
+  }*/
 
   //Create and open csv file to append packet
   File capture = SPIFFS.open("/captureMACs.csv", "a+");
@@ -123,7 +123,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   Serial.print(snifferPacket->cnt);
   Serial.println();*/
 
-  printPacket(snifferPacket->data, snifferPacket->rx_ctrl.legacy_length);
+  printPacket(snifferPacket->data);
 
   Serial.println();
   Serial.println();
@@ -221,11 +221,11 @@ static void getMAC(char *addr, uint8_t* data, uint16_t offset) {
     }
 }*/
 
-static void printPacket(uint8_t* data, int length){
+static void printPacket(uint8_t* data){
     int j = 0;
     printf("000%02x  ", j);
 
-    for(uint16_t i = 0; (i < DATA_LENGTH) && (i < length); i++) {
+    for(uint16_t i = 0; i < DATA_LENGTH ; i++) {
         j++;
         printf("%02x ", data[i]);
         if(j%8 == 0){
