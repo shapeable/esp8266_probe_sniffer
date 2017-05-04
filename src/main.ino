@@ -2,6 +2,7 @@ extern "C" {
   #include <user_interface.h>
 }
 #include "FS.h"
+#include <ESP8266WiFi.h>
 #define DATA_LENGTH           112
 
 #define TYPE_MANAGEMENT       0x00
@@ -44,7 +45,7 @@ struct SnifferPacket{
     uint16_t len;
 };
 
-
+//struct softap_config *APconfig;
 int count = 0;
 int numberOfMACs = 0;
 int probeCount = 0;
@@ -64,39 +65,29 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   uint8_t SSID_length  = snifferPacket->data[25];
 
   // Only look for probe request packets
-  if (frameSubType == SUBTYPE_BEACON){
+  if (frameType != TYPE_MANAGEMENT || frameSubType != SUBTYPE_PROBE_REQUEST){
       return;
   }
   // Filter out broadcast probes
-  /*if(SSID_length == 0){
+  if(SSID_length == 0){
       return;
-  }*/
+  }
 
   //Create and open csv file to append packet
-  File capture = SPIFFS.open("/captureMACs.csv", "a+");
   File MAClog = SPIFFS.open("/captureMACs.csv", "a+");
   //File SSIDlog = SPIFFS.open("/captureSSID.csv", "a+");
   if (!MAClog){
       Serial.println("files failed to open");
   }
 
-  //Serial.print("RSSI: ");
-  //Serial.print(snifferPacket->rx_ctrl.rssi, DEC);
-
-  //Serial.print(" Ch: ");
-  //Serial.println(wifi_get_channel());
-
   char addr[] = "00:00:00:00:00:00";
   getMAC(addr, snifferPacket->data, 10);
-  //Serial.print("Client MAC: ");
-  //Serial.println(addr);
 
   MAClog.println(addr);
 
-  //Serial.print("Target SSID: ");
-  //printDataSpan(26, SSID_length, snifferPacket->data);
+  printDataSpan(26, SSID_length, snifferPacket->data);
   //SSIDlog.println(printDataSpan(26, SSID_length, snifferPacket->data));
-  //Serial.println();
+  Serial.println();
 
   //Check 2nd byte, 7th bit for encryption
   //Serial.print("Encryption: ");
@@ -107,25 +98,9 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   Serial.print(snifferPacket->rx_ctrl.rate, HEX);
   Serial.print(snifferPacket->rx_ctrl.is_group, HEX);*/
 
-  /*Serial.print(snifferPacket->rx_ctrl.legacy_length, DEC);
-  Serial.print(" ");
-  Serial.println(snifferPacket->rx_ctrl.HT_length, DEC);
-  Serial.print(" ");*/
-  //Serial.println(len);
-  //for(int i = 0 ; i < 18 ; i++){
-  //printf("%02x ", snifferPacket->rx_ctrl[i]);
-  //Serial.println();
-  //}
-  /*Serial.print(snifferPacket->rx_ctrl.legacy_length);
-  Serial.print(" ");
-  Serial.print(snifferPacket->len);
-  Serial.print(" ");
-  Serial.print(snifferPacket->cnt);
-  Serial.println();*/
+  //Perform hex dump of captured packet to serial
+  hexDump(snifferPacket->data);
 
-  printPacket(snifferPacket->data);
-
-  Serial.println();
   Serial.println();
 
   MAClog.close();
@@ -137,60 +112,15 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       Serial.println("file failed to open");
   }
 
-  String s;
-  char* entry;
-  int addMAC = 1;
-
-  // unique string function
-  while (MAClog.available()) {
-      s = MAClog.readStringUntil('\n');
-      entry = stringToChar(s, 16);
-      //Serial.println(entry);
-      if(strcmp(addr, entry) != 0){
-          addMAC = 0;
-      }
-  }
-  if(addMAC == 1){
+  if(uniqueString(MAClog, addr)){
       count++;
   }
-  /*if(count > 0){
 
-    count--;
-    numberOfMACs++;
-
-    Serial.print("Unique MACs: ");
-    Serial.println(numberOfMACs);
-  }*/
+  Serial.println(count);
+  Serial.println();
   probeCount++;
-  //Serial.print("Probe Requests Captured: ");
-  //Serial.println(probeCount);
-
-  //Serial.print("Unique MACs: ");
-  //Serial.println(count);
-  //Serial.println();
-
-  /*Serial.print("Interrupts: ");
-  Serial.println(interruptCounter);
-  Serial.println();*/
-  //Dump captured data
-  /*if(interruptCounter > 0){
-      s = MAClog.readStringUntil('\n');
-      entry = stringToChar(s, 16);
-      Serial.print(entry);
-      Serial.print(", ");
-
-  }*/
 
   MAClog.close();
-  //check UART for data
-  /*if(Serial.available())
-  {
-      //size_t len = Serial.available();
-      //uint8_t sbuf[len];
-      //Serial.readBytes(sbuf, len);
-      //Serial.println(sbuf[1]);
-      interruptCounter++;
-   }*/
 }
 
 /**
@@ -221,7 +151,7 @@ static void getMAC(char *addr, uint8_t* data, uint16_t offset) {
     }
 }*/
 
-static void printPacket(uint8_t* data){
+static void hexDump(uint8_t* data){
     int j = 0;
     printf("000%02x  ", j);
 
@@ -246,6 +176,24 @@ static char* stringToChar(String s, int buffer){
         array[i] = s[i];
     }
     return array;
+}
+
+static bool uniqueString(File f, char *current){
+
+    String s;
+    char* entry;
+    bool unique = 1;
+
+    while (f.available()) {
+        s = f.readStringUntil('\n');
+        entry = stringToChar(s, 16);
+        Serial.println(current);
+        Serial.println(entry);
+        if(strcmp(current, entry) == 0){
+            unique = 0;
+        }
+    }
+  return unique;
 }
 
 void handleInterrupt() {
@@ -275,7 +223,7 @@ void setup() {
     //Start serial connection
     Serial.begin(115200);
     pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, FALLING);
+    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, RISING);
 
     //Format file system
     SPIFFS.begin();
@@ -294,6 +242,7 @@ void setup() {
     delay(10);
     wifi_promiscuous_enable(ENABLE);
 
+
     // setup the channel hoping callback timer
     os_timer_disarm(&channelHop_timer);
     os_timer_setfn(&channelHop_timer, (os_timer_func_t *) channelHop, NULL);
@@ -301,7 +250,6 @@ void setup() {
 }
 
 void loop() {
-    delay(10);
     if(interruptCounter > 0){
 
         interruptCounter--;
@@ -310,5 +258,26 @@ void loop() {
         Serial.print("An interrupt has occurred. Total: ");
         Serial.println(numberOfInterrupts);
 
+        wifi_promiscuous_enable(DISABLE);
+
+        wifi_set_promiscuous_rx_cb(NULL);
+
+        wifi_set_opmode(WIFI_AP);
+
+        //struct softap_config ap_config = {"OpenWrt3"};
+
+        //wifi_softap_set_config(&ap_config);
+
+        Serial.print("Setting soft-AP ... ");
+
+        Serial.println(WiFi.softAP("ESPsoftAP_01") ? "Ready" : "Failed!");
+
     }
+    if(numberOfInterrupts > 0){
+        Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
+        delay(3000);
+
+    }
+    delay(1000);
+
 }
