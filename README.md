@@ -1,13 +1,15 @@
 # ESP8266 Probe Sniffer
 
-This repository is heavily derived from [esp8266-sniffer](http://github.com/kalanda/esp8266-sniffer)  
-
+This repository is heavily derived from [esp8266-sniffer](http://github.com/kalanda/esp8266-sniffer).
+It also makes use of the examples from the following repository, https://github.com/squix78/esp8266-oled-ssd1306/ 
 Currently, the main changes include:  
-Rejection of broadcast probes (considered uninteresting)  
-Addition of the SPI file system for logging captured packets  
-printPacket function to view captured packets  
-stringToChar and uniqueString functions for performing string compares
-Outputs hex dump over serial
+* Rejection of broadcast probes (considered uninteresting)  
+* hexDump function to view captured packets  
+* stringToChar function
+* an i2c screen to display SSIDs of captured probe requests
+* structures for organizing SSID and MAC address data
+* logic for identifying news SSIDs and unique probe requests
+* interrupt logic for two push buttons  
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.

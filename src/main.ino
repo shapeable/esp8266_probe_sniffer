@@ -1,8 +1,12 @@
 extern "C" {
   #include <user_interface.h>
 }
-#include "FS.h"
 #include <ESP8266WiFi.h>
+#include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
+#include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
+
+SSD1306  display(0x3c, D5, D6);
+
 #define DATA_LENGTH           112
 
 #define TYPE_MANAGEMENT       0x00
@@ -10,6 +14,9 @@ extern "C" {
 #define TYPE_DATA             0x02
 #define SUBTYPE_PROBE_REQUEST 0x04
 #define SUBTYPE_BEACON        0x08
+
+#define DEMO_DURATION 10000
+typedef void (*Demo)(void);
 
 struct RxControl {
  signed rssi:8; // signal intensity of packet
@@ -45,13 +52,28 @@ struct SnifferPacket{
     uint16_t len;
 };
 
-//struct softap_config *APconfig;
-int count = 0;
-int numberOfMACs = 0;
+struct SSID{
+    String name;
+    String MAClist[10];
+    int uniques = 0;
+    signed average_rssi;
+};
+
+struct SSID SSIDlist[100];
+
+int SSIDcount = 0;
 int probeCount = 0;
+
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
-const byte interruptPin = 3;
+const byte interruptPin = D1;
+
+int numberOfInterrupts2 = 0;
+volatile byte interrupt2Counter = 0;
+const byte interrupt2Pin = D2;
+
+int demoMode = 0;
+int counter = 1;
 
 static void showMetadata(SnifferPacket *snifferPacket) {
 
@@ -73,54 +95,52 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       return;
   }
 
-  //Create and open csv file to append packet
-  File MAClog = SPIFFS.open("/captureMACs.csv", "a+");
-  //File SSIDlog = SPIFFS.open("/captureSSID.csv", "a+");
-  if (!MAClog){
-      Serial.println("files failed to open");
+  String SSIDcurrent = getSSID(26, SSID_length, snifferPacket->data);
+  printf("%s, ", SSIDcurrent.c_str());
+
+  char *addr = "00:00:00:00:00:00";
+  String MACcurrent = getMAC(addr, snifferPacket->data, 10);
+  printf("%s, ", MACcurrent.c_str());
+
+  //Matching logic, convert to function
+  int match = 0;
+  int trig = 0;
+  int i = 0;
+  int j = 0;
+  for ( i = 0 ; i <= SSIDcount ; i++){
+      if(SSIDcurrent == SSIDlist[i].name){
+          trig++;
+          match = i;
+      }
+  }
+  if (trig == 0){
+    SSIDcount++;
+    match = SSIDcount;
+    SSIDlist[SSIDcount].name = SSIDcurrent;
+  }
+  int matchMAC = 0;
+  trig = 0;
+  for ( j = 0 ; j <= SSIDlist[match].uniques ; j++){
+      if(MACcurrent == SSIDlist[match].MAClist[j]){
+          trig++;
+          matchMAC = j;
+      }
+  }
+  if (trig == 0){
+    SSIDlist[match].uniques++;
+    SSIDlist[match].MAClist[SSIDlist[match].uniques] = MACcurrent;
   }
 
-  char addr[] = "00:00:00:00:00:00";
-  getMAC(addr, snifferPacket->data, 10);
-
-  MAClog.println(addr);
-
-  printDataSpan(26, SSID_length, snifferPacket->data);
-  //SSIDlog.println(printDataSpan(26, SSID_length, snifferPacket->data));
-  Serial.println();
-
-  //Check 2nd byte, 7th bit for encryption
-  //Serial.print("Encryption: ");
-  //Serial.print(snifferPacket->data[2]);
-  //Serial.println();
-  //printPacket(snifferPacket->rx_ctrl);
-  /*Serial.print(snifferPacket->rx_ctrl.rssi, HEX);
-  Serial.print(snifferPacket->rx_ctrl.rate, HEX);
-  Serial.print(snifferPacket->rx_ctrl.is_group, HEX);*/
+  //Serial.print(snifferPacket->rx_ctrl.rssi, HEX);
 
   //Perform hex dump of captured packet to serial
-  hexDump(snifferPacket->data);
+  //hexDump(snifferPacket->data);
 
-  Serial.println();
-
-  MAClog.close();
-  //SSIDlog.close();
-
-  // Reopen csv to read captured packets
-  MAClog = SPIFFS.open("/captureMACs.csv", "r");
-  if(!MAClog){
-      Serial.println("file failed to open");
-  }
-
-  if(uniqueString(MAClog, addr)){
-      count++;
-  }
-
-  Serial.println(count);
-  Serial.println();
+  printf("%d, ", SSIDlist[match].uniques);
+  printf("%d, ", match);
+  printf("%d\n", SSIDcount);
   probeCount++;
 
-  MAClog.close();
 }
 
 /**
@@ -131,25 +151,22 @@ static void ICACHE_FLASH_ATTR sniffer_callback(uint8_t *buffer, uint16_t length)
     showMetadata(snifferPacket);
 }
 
-static void printDataSpan(uint16_t start, uint16_t size, uint8_t* data) {
+static String getSSID(uint16_t start, uint16_t size, uint8_t* data) {
+    String ssid = "";
+    char letter;
     for(uint16_t i = start; i < DATA_LENGTH && i < start+size; i++) {
-        Serial.write(data[i]);
+        letter = data[i];
+        ssid += letter;
     }
+    return ssid;
 }
 
-static void getMAC(char *addr, uint8_t* data, uint16_t offset) {
+static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     sprintf(addr, "%02x:%02x:%02x:%02x:%02x:%02x", data[offset+0], data[offset+1],
                     data[offset+2], data[offset+3], data[offset+4], data[offset+5]);
+    String MAC(addr);
+    return MAC;
 }
-
-/*static void printPacket(uint8_t* data){
-    for(uint16_t i = 0; i < DATA_LENGTH; i++) {
-        printf("%02x", data[i]);
-        Serial.print(" ");
-        if((i+1)%10 == 0)
-            Serial.println();
-    }
-}*/
 
 static void hexDump(uint8_t* data){
     int j = 0;
@@ -165,8 +182,6 @@ static void hexDump(uint8_t* data){
             Serial.println();
             printf("000%02x  ", j);
         }
-
-
     }
 }
 
@@ -178,26 +193,39 @@ static char* stringToChar(String s, int buffer){
     return array;
 }
 
-static bool uniqueString(File f, char *current){
+String scan = "Scanning";
+void displayScanning() {
+  int progress = (counter / 2) % 100;
+    // draw the progress bar
+  display.drawProgressBar(0, 32, 120, 10, progress);
 
-    String s;
-    char* entry;
-    bool unique = 1;
+  // draw the percentage as String
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 15, String(progress) + "%");
 
-    while (f.available()) {
-        s = f.readStringUntil('\n');
-        entry = stringToChar(s, 16);
-        Serial.println(current);
-        Serial.println(entry);
-        if(strcmp(current, entry) == 0){
-            unique = 0;
-        }
-    }
-  return unique;
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+
+  if (progress%10){
+    scan += ".";
+  }
+  display.drawString(0, 0, scan);
+}
+
+void displaySSIDs() {
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  for ( int i = 0 ; i <= SSIDcount ; i++){
+      display.drawRect(0, numberOfInterrupts2*10, 70, 12);
+
+      display.drawString(0, i*10, SSIDlist[i+1].name);
+  }
 }
 
 void handleInterrupt() {
   interruptCounter++;
+}
+
+void handleInterrupt2() {
+  interrupt2Counter++;
 }
 
 #define CHANNEL_HOP_INTERVAL_MS   1000
@@ -218,19 +246,18 @@ void channelHop()
 #define DISABLE 0
 #define ENABLE  1
 
+Demo demos[] = { displayScanning, displaySSIDs};
+int demoLength = (sizeof(demos) / sizeof(Demo));
+long timeSinceLastModeSwitch = 0;
+
 void setup() {
 
     //Start serial connection
     Serial.begin(115200);
     pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, RISING);
-
-    //Format file system
-    SPIFFS.begin();
-    Serial.println();
-    Serial.println("Please wait 30 secs for SPIFFS to be formatted");
-    SPIFFS.format();
-    Serial.println("Spiffs formatted");
+    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, FALLING);
+    pinMode(interrupt2Pin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(interrupt2Pin), handleInterrupt2, FALLING);
 
     // set the WiFi chip to "promiscuous" mode aka monitor mode
     delay(10);
@@ -242,42 +269,72 @@ void setup() {
     delay(10);
     wifi_promiscuous_enable(ENABLE);
 
-
     // setup the channel hoping callback timer
     os_timer_disarm(&channelHop_timer);
     os_timer_setfn(&channelHop_timer, (os_timer_func_t *) channelHop, NULL);
     os_timer_arm(&channelHop_timer, CHANNEL_HOP_INTERVAL_MS, 1);
+
+    // Initialising the UI will init the display too.
+    display.init();
+    display.flipScreenVertically();
+    display.setFont(ArialMT_Plain_10);
 }
 
 void loop() {
-    if(interruptCounter > 0){
 
-        interruptCounter--;
-        numberOfInterrupts++;
+  // clear the display
+  display.clear();
+  // draw the current demo method
+  demos[demoMode]();
 
-        Serial.print("An interrupt has occurred. Total: ");
-        Serial.println(numberOfInterrupts);
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);
+  display.drawString(10, 128, String(millis()));
+  // write the buffer to the display
+  display.display();
 
-        wifi_promiscuous_enable(DISABLE);
+  if ((millis() - timeSinceLastModeSwitch > DEMO_DURATION)) {
 
-        wifi_set_promiscuous_rx_cb(NULL);
+    demoMode = 1;
+    //timeSinceLastModeSwitch = millis();
+  }
+  if(interruptCounter > 0){
 
-        wifi_set_opmode(WIFI_AP);
+      interruptCounter--;
+      numberOfInterrupts++;
 
-        //struct softap_config ap_config = {"OpenWrt3"};
+      Serial.print("An interrupt has occurred. Total: ");
+      Serial.println(numberOfInterrupts);
 
-        //wifi_softap_set_config(&ap_config);
+      wifi_promiscuous_enable(DISABLE);
 
-        Serial.print("Setting soft-AP ... ");
+      wifi_set_promiscuous_rx_cb(NULL);
 
-        Serial.println(WiFi.softAP("ESPsoftAP_01") ? "Ready" : "Failed!");
+      wifi_set_opmode(WIFI_AP);
 
-    }
-    if(numberOfInterrupts > 0){
-        Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
-        delay(3000);
+      /*for ( int i = 1 ; i <= SSIDcount ; i++){
+          Serial.println(SSIDlist[i].name);
+      }*/
 
-    }
-    delay(1000);
+      Serial.print("Setting AP for ");
+      Serial.print(SSIDlist[numberOfInterrupts2+1].name);
+      Serial.print("...");
+      char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
+      Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
+
+  }
+  if(interrupt2Counter > 0){
+    interrupt2Counter--;
+    numberOfInterrupts2++;
+  }
+  if(numberOfInterrupts > 0){
+      Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
+      delay(3000);
+
+  }
+  if(numberOfInterrupts2 > 5){
+    numberOfInterrupts2 = 0;
+  }
+  counter++;
+  delay(500);
 
 }
