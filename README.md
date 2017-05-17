@@ -10,6 +10,7 @@ Currently, the main changes include:
 * structures for organizing SSID and MAC address data
 * logic for identifying news SSIDs and unique probe requests
 * interrupt logic for two push buttons  
+* captive portal with logon form  
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.
