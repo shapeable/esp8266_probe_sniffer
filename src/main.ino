@@ -63,7 +63,7 @@ struct SSID{
     signed average_rssi;
 };
 
-struct SSID SSIDlist[20];
+struct SSID SSIDlist[10];
 
 int SSIDcount = 0;
 
@@ -124,6 +124,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       return;
   }
 
+
   String SSIDcurrent = getSSID(26, SSID_length, snifferPacket->data);
   printf("%s, ", SSIDcurrent.c_str());
 
@@ -143,6 +144,10 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       }
   }
   if (trig == 0){
+    //Limit to 10 SSIDs
+    if (SSIDcount > 9){
+        return;
+    }
     SSIDcount++;
     match = SSIDcount;
     SSIDlist[SSIDcount].name = SSIDcurrent;
@@ -156,8 +161,28 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       }
   }
   if (trig == 0){
+    //Limit to 10 MACs to prevent overflow
+    if (SSIDlist[match].uniques > 9){
+        return;
+    }
     SSIDlist[match].uniques++;
     SSIDlist[match].MAClist[SSIDlist[match].uniques] = MACcurrent;
+  }
+
+  //Sorting logic
+
+  //sort(SSIDlist, SSIDlist[].uniques)
+
+  struct SSID SSIDswap;
+
+  for ( i = 1 ; i < SSIDcount - 1 ; i++){
+      for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
+        if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
+            SSIDswap = SSIDlist[j];
+            SSIDlist[j] = SSIDlist[j+1];
+            SSIDlist[j+1] = SSIDswap;
+        }
+      }
   }
 
   //Serial.print(snifferPacket->rx_ctrl.rssi, HEX);
@@ -218,7 +243,7 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
 }*/
 
 static char* stringToChar(String s){
-    int buffer = s.length();
+    int buffer = 32; //s.length();
     char array[buffer];
     for(int i = 0; i <= buffer; i++){
         array[i] = s[i];
@@ -252,19 +277,28 @@ static void ICACHE_FLASH_ATTR displaySSIDs() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 0, "SSID");
   display.drawString(90, 0, "uniques");
+  String ap;
 
   if (numberOfInterrupts2 <= 4){
-    for ( int i = 1 ; i <= 5 ; i++){
+    for ( int i = 1 ; i <= 5 && i <= SSIDcount ; i++){
         display.drawRect(0, (numberOfInterrupts2+1)*10, 80, 12);
-
-        display.drawString(0, i*10, SSIDlist[i].name);
+        ap = SSIDlist[i].name;
+        if (ap.length() > 12){
+            ap.remove(12, 20);
+            ap += "...";
+        }
+        display.drawString(0, i*10, ap);
         display.drawString(90, i*10, String(SSIDlist[i].uniques));
     }
   }else{
-    for ( int i = 1 ; i <= 5 ; i++){
+    for ( int i = 1 ; i <= 5 && i <= SSIDcount-(4-i) ; i++){
         display.drawRect(0, 50, 80, 12);
-
-        display.drawString(0, i*10, SSIDlist[i+numberOfInterrupts2-4].name);
+        ap = SSIDlist[i+numberOfInterrupts2-4].name;
+        if (ap.length() > 12){
+            ap.remove(12, 20);
+            ap += "...";
+        }
+        display.drawString(0, i*10, ap);
         display.drawString(90, i*10, String(SSIDlist[i+numberOfInterrupts2-4].uniques));
     }
   }
@@ -303,11 +337,11 @@ static void captivePortal(){
   wifi_set_opmode(WIFI_AP);
   delay(10);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-  //WiFi.softAP("ESP-D1mini");
+
   delay(10);
   char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name);
-  //WiFi.softAP(ap);
-  Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
+  WiFi.softAP(ap);
+  //Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
   delay(10);
   // if DNSServer is started with "*" for domain name, it will reply with
   // provided IP to all DNS request
@@ -389,7 +423,6 @@ void loop() {
   button1.Update();
   button2.Update();
 
-  //if (button1.clicks != 0) function = button1.clicks;
   // clear the display
   display.clear();
   // draw the current Screen method
@@ -406,20 +439,21 @@ void loop() {
     timeOfLastModeSwitch = millis();
   }
 
-  if(button1.clicks == 1){
+  if(button1.clicks == 1 && numberOfInterrupts == 0){
     Serial.println("button clicked");
     //interrupt2Counter--;
     numberOfInterrupts2++;
   }
 
-  if(numberOfInterrupts2 > 9){
+  if(numberOfInterrupts2 >= SSIDcount){
     numberOfInterrupts2 = 0;
   }
 
-  if(button2.clicks == 1){
+  if(button2.clicks == 1 && numberOfInterrupts == 0){
 
       //interruptCounter--;
       numberOfInterrupts++;
+
       //detachInterrupt(interruptPin);
       //detachInterrupt(interrupt2Pin);
 
@@ -431,7 +465,7 @@ void loop() {
       wifi_set_promiscuous_rx_cb(NULL);
 
       delay(10);
-      //wifi_set_opmode(WIFI_AP);
+
       screenState = 2;
       timeOfLastModeSwitch = millis();
       counter = 0;
@@ -440,9 +474,6 @@ void loop() {
 
       captivePortal();
 
-      /*for ( int i = 1 ; i <= SSIDcount ; i++){
-          Serial.println(SSIDlist[i].name);
-      }*/
       delay(10);
 
       //WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
