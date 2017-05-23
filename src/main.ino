@@ -2,11 +2,18 @@ extern "C" {
   #include <user_interface.h>
 }
 #include <ESP8266WiFi.h>
+#include <FS.h>
 #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
 #include <ClickButton.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <DNSServer.h>
+#include <EEPROM.h>
+
+/*#include "index_html.h"
+#include "l_svg.h"*/
+
 
 SSD1306  display(0x3c, D5, D6);
 
@@ -83,12 +90,12 @@ int screenState = 0;
 int counter = 1;
 long timeOfLastModeSwitch = 0;
 
-const byte DNS_PORT = 53;  //THESE WERE BREAKING IT ???
-IPAddress apIP(192, 168, 1, 1);
-DNSServer dnsServer;
-ESP8266WebServer webServer(80);
+//const byte DNS_PORT = 53;  //THESE WERE BREAKING IT ???
+//IPAddress apIP(192, 168, 1, 1);
+//DNSServer dnsServer;
+//ESP8266WebServer webServer(80);
 
-String responseHTML = ""
+/*String responseHTML = ""
   "<!DOCTYPE html><html><head><title>CaptivePortal</title></head><body>"
   "<section class='loginform cf'>"
   "<form name='login' action='index_submit' method='get' accept-charset='utf-8'>"
@@ -102,7 +109,7 @@ String responseHTML = ""
   "</ul>"
 "</form>"
 "</section>"
-"</body></html>";
+"</body></html>";*/
 
 static void showMetadata(SnifferPacket *snifferPacket) {
 
@@ -242,14 +249,14 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     }
 }*/
 
-static char* stringToChar(String s){
+/*static char* stringToChar(String s){
     int buffer = 32; //s.length();
     char array[buffer];
     for(int i = 0; i <= buffer; i++){
         array[i] = s[i];
     }
     return array;
-}
+}*/
 
 String scan = "Scanning.";
 static void ICACHE_FLASH_ATTR displayScanning() {
@@ -331,7 +338,7 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.drawString(64, 45, String(WiFi.softAPgetStationNum()));
 }
 
-static void captivePortal(){
+/*static void captivePortal(){
 
 
   wifi_set_opmode(WIFI_AP);
@@ -353,7 +360,7 @@ static void captivePortal(){
   });
   webServer.begin();
 
-}
+}*/
 
 /*static void ICACHE_FLASH_ATTR handleInterrupt() {
   interruptCounter++;
@@ -460,9 +467,10 @@ void loop() {
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
 
+      // Disable promscious mode and turn off channel hop before setting up AP
       wifi_promiscuous_enable(DISABLE);
-
       wifi_set_promiscuous_rx_cb(NULL);
+      os_timer_disarm(&channelHop_timer);
 
       delay(10);
 
@@ -472,7 +480,7 @@ void loop() {
 
       delay(10);
 
-      captivePortal();
+      captiveSetup();
 
       delay(10);
 
@@ -498,9 +506,10 @@ void loop() {
 
       //Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
       delay(10);
-      dnsServer.processNextRequest();
+      captiveLoop();
+      /*dnsServer.processNextRequest();
       delay(10);
-      webServer.handleClient();
+      webServer.handleClient();*/
       //delay(3000);
   }
 
