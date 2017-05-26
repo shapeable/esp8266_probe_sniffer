@@ -73,18 +73,19 @@ struct SSID{
 struct SSID SSIDlist[10];
 
 int SSIDcount = 0;
+int capturecount = 0;
 
 const int LEDpin = D0;
 
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
 const int interruptPin = D1;
-ClickButton button2(interruptPin, LOW, CLICKBTN_PULLUP);
+ClickButton selectButton(interruptPin, LOW, CLICKBTN_PULLUP);
 
 int numberOfInterrupts2 = 0;
 volatile byte interrupt2Counter = 0;
 const int interrupt2Pin = D2;
-ClickButton button1(interrupt2Pin, LOW, CLICKBTN_PULLUP);
+ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
 int screenState = 0;
 int counter = 1;
@@ -260,8 +261,11 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
 
 String scan = "Scanning.";
 static void ICACHE_FLASH_ATTR displayScanning() {
-  int progress = (counter) % 100;
+  //int progress = (counter) % 100;
+  //Serial.println(millis());
+  int progress = ((millis()*100)/STATE0_DURATION);
     // draw the progress bar
+
   display.drawProgressBar(0, 32, 120, 10, progress);
 
   // draw the percentage as String
@@ -315,7 +319,8 @@ static void ICACHE_FLASH_ATTR displaySSIDs() {
 static void ICACHE_FLASH_ATTR displayAPsetup() {
   // draw the progress bar
   //display.drawProgressBar(0, 32, 120, 10, progress);
-  int progress = (counter*5) % 100;
+  //int progress = (counter*5) % 100;
+  int progress = (((millis()-timeOfLastModeSwitch)*100)/2700);
   // draw the percentage as String
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   //display.drawString(64, 15, String(progress) + "%");
@@ -335,7 +340,7 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.drawString(64, 0, "Captive portal on");
   display.drawString(64, 15, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
   display.drawString(64, 30, "Credentials Captured:");
-  display.drawString(64, 45, String(WiFi.softAPgetStationNum()));
+  display.drawString(64, 45, String(capturecount));
 }
 
 /*static void captivePortal(){
@@ -389,7 +394,7 @@ void channelHop()
 #define ENABLE  1
 
 Screen screens[] = { displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture};
-int demoLength = (sizeof(screens) / sizeof(Screen));
+//int demoLength = (sizeof(screens) / sizeof(Screen));
 
 void setup() {
 
@@ -399,19 +404,22 @@ void setup() {
     digitalWrite(LEDpin, HIGH);
     // setup interrupt pins
     pinMode(interruptPin, INPUT_PULLUP);
-    //ClickButton button1(interruptPin, LOW, CLICKBTN_PULLUP);
     //attachInterrupt(interruptPin, handleInterrupt, FALLING);
     pinMode(interrupt2Pin, INPUT_PULLUP);
+    selectButton.debounceTime = 100;
+    updownButton.debounceTime = 100;
+    selectButton.multiclickTime = 0;
+    updownButton.multiclickTime = 0;
     //attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
 
     // set the WiFi chip to "promiscuous" mode aka monitor mode
-    delay(10);
+    //delay(10);
     wifi_set_opmode(STATION_MODE);
     wifi_set_channel(1);
     wifi_promiscuous_enable(DISABLE);
-    delay(10);
+    //delay(10);
     wifi_set_promiscuous_rx_cb(sniffer_callback);
-    delay(10);
+    //delay(10);
     wifi_promiscuous_enable(ENABLE);
 
     // setup the channel hoping callback timer
@@ -427,8 +435,8 @@ void setup() {
 
 void loop() {
 
-  button1.Update();
-  button2.Update();
+  updownButton.Update();
+  selectButton.Update();
 
   // clear the display
   display.clear();
@@ -444,11 +452,15 @@ void loop() {
 
     screenState = 1;
     timeOfLastModeSwitch = millis();
+
+    // Disable promscious mode and turn off channel hop before setting up AP
+    wifi_promiscuous_enable(DISABLE);
+    wifi_set_promiscuous_rx_cb(NULL);
+    os_timer_disarm(&channelHop_timer);
   }
 
-  if(button1.clicks == 1 && numberOfInterrupts == 0){
+  if(updownButton.clicks >= 1 && screenState == 1){
     Serial.println("button clicked");
-    //interrupt2Counter--;
     numberOfInterrupts2++;
   }
 
@@ -456,9 +468,8 @@ void loop() {
     numberOfInterrupts2 = 0;
   }
 
-  if(button2.clicks == 1 && numberOfInterrupts == 0){
+  if(selectButton.clicks >= 1 && screenState == 1){
 
-      //interruptCounter--;
       numberOfInterrupts++;
 
       //detachInterrupt(interruptPin);
@@ -467,22 +478,17 @@ void loop() {
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
 
-      // Disable promscious mode and turn off channel hop before setting up AP
-      wifi_promiscuous_enable(DISABLE);
-      wifi_set_promiscuous_rx_cb(NULL);
-      os_timer_disarm(&channelHop_timer);
-
-      delay(10);
+      //delay(10);
 
       screenState = 2;
       timeOfLastModeSwitch = millis();
       counter = 0;
 
-      delay(10);
+      //delay(10);
 
       captiveSetup();
 
-      delay(10);
+      //delay(10);
 
       //WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
       Serial.print("Setting AP for ");
@@ -505,7 +511,7 @@ void loop() {
   if(numberOfInterrupts > 0){
 
       //Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
-      delay(10);
+      //delay(10);
       captiveLoop();
       /*dnsServer.processNextRequest();
       delay(10);
@@ -514,7 +520,7 @@ void loop() {
   }
 
   counter++;
-  delay(100);
+  //delay(100);
   digitalWrite(LEDpin, HIGH);
 
 }

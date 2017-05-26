@@ -2,25 +2,23 @@
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>*/
 
+const char *myHostname = "esp8266";
+
+char ssid[32] = "";
+char password[32] = "";
+
 const byte DNS_PORT = 53;
 IPAddress apIP(192, 168, 1, 1);
 DNSServer dnsServer;
-ESP8266WebServer webServer(80);
+ESP8266WebServer server(80);
 
 String responseHTML = ""
   "<!DOCTYPE html><html><head><title>CaptivePortal</title></head><body>"
-  "<section class='loginform cf'>"
-  "<form name='login' action='index_submit' method='get' accept-charset='utf-8'>"
-  "<ul>"
-  "<li><label for='usermail'>Username </label>"
-    "<input type='username' name='username'></li>"
-    "<li><label for='password'>Password </label>"
-    "<input type='password' name='password'></li>"
-    "<li>"
-    "<input type='submit' value='Login'></li>"
-  "</ul>"
-"</form>"
-"</section>"
+  "</table>"
+  "\r\n<br /><form method='POST' action='wifisave'><h4>Connect to network:</h4>"
+  "<input type='text' placeholder='username' name='n'/>"
+  "<br /><input type='password' placeholder='password' name='p'/>"
+  "<br /><input type='submit' value='Connect/Disconnect'/></form>"
 "</body></html>";
 
 void captiveSetup() {
@@ -49,13 +47,17 @@ void captiveSetup() {
   dnsServer.start(DNS_PORT, "*", apIP);
 
   // replay to all requests with same HTML
-  webServer.onNotFound([]() {
-    webServer.send(200, "text/html", responseHTML);
+  server.onNotFound([]() {
+    server.send(200, "text/html", responseHTML);
   });
-  webServer.begin();
+  server.on("/wifisave", handleWifiSave);
+  server.begin();
+  loadCredentials();
+  Serial.println(ssid);
+  Serial.println(password);
 }
 
 void captiveLoop() {
   dnsServer.processNextRequest();
-  webServer.handleClient();
+  server.handleClient();
 }
