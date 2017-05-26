@@ -83,7 +83,7 @@ struct credentials{
 int addr = 0;
 int previousCaptures = 0;
 
-struct credentials capturedCredentials[10];
+struct credentials capturedCredentials[100];
 
 const int LEDpin = D0;
 
