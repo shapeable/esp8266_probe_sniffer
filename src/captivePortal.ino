@@ -1,11 +1,5 @@
-/*#include <ESP8266WiFi.h>
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>*/
 
 const char *myHostname = "esp8266";
-
-char ssid[32] = "";
-char password[32] = "";
 
 const byte DNS_PORT = 53;
 IPAddress apIP(192, 168, 1, 1);
@@ -14,6 +8,7 @@ ESP8266WebServer server(80);
 
 String responseHTML = ""
   "<!DOCTYPE html><html><head><title>CaptivePortal</title></head><body>"
+  "<h1>Please sign in to your WiFi</h1>"
   "</table>"
   "\r\n<br /><form method='POST' action='wifisave'><h4>Connect to network:</h4>"
   "<input type='text' placeholder='username' name='n'/>"
@@ -52,9 +47,7 @@ void captiveSetup() {
   });
   server.on("/wifisave", handleWifiSave);
   server.begin();
-  loadCredentials();
-  Serial.println(ssid);
-  Serial.println(password);
+
 }
 
 void captiveLoop() {

@@ -17,7 +17,8 @@ Currently, the main changes/additions include:
 * clickButton library for debouncing interrupts
 * disable buttons after selection of SSID
 * turn off channel hoping before setting up as AP
-* moved cpative portal to separate ino file
+* moved captive portal to separate ino file
+* captured credentials saved to EEPROM and dumped over serial on reset
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.

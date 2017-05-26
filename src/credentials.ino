@@ -1,29 +1,40 @@
 /** Load WLAN credentials from EEPROM */
-void loadCredentials() {
+void loadCredentials( int i) {
+
   EEPROM.begin(512);
-  EEPROM.get(0, ssid);
-  EEPROM.get(0+sizeof(ssid), password);
+
+  EEPROM.get(addr, capturedCredentials[i].username);
+  addr += sizeof(capturedCredentials[i].username);
+  EEPROM.get(addr, capturedCredentials[i].password);
+  addr += sizeof(capturedCredentials[i].password);
   char ok[2+1];
-  EEPROM.get(0+sizeof(ssid)+sizeof(password), ok);
+  EEPROM.get(addr, ok);
   EEPROM.end();
-  if (String(ok) != String("OK")) {
-    ssid[0] = 0;
-    password[0] = 0;
+
+  //check for end of stored credentials
+  if (String(ok) == String("OK")) {
+    previousCaptures = i;
   }
-  Serial.println("Recovered credentials:");
-  Serial.println(ssid);
-  Serial.println(strlen(password)>0?"********":"<no password>");
 }
 
 /** Store WLAN credentials to EEPROM */
 void saveCredentials() {
-  Serial.println(ssid);
-  Serial.println(password);
+
+  Serial.println(capturedCredentials[capturecount].username);
+  Serial.println(capturedCredentials[capturecount].password);
+
   EEPROM.begin(512);
-  EEPROM.put(0, ssid);
-  EEPROM.put(0+sizeof(ssid), password);
+  EEPROM.put(addr, capturedCredentials[capturecount].username);
+  addr += sizeof(capturedCredentials[capturecount].username);
+  Serial.println(sizeof(capturedCredentials[capturecount].username));
+  EEPROM.put(addr, capturedCredentials[capturecount].password);
+  addr += sizeof(capturedCredentials[capturecount].password);
+
+  //mark the end of stored credentials
   char ok[2+1] = "OK";
-  EEPROM.put(0+sizeof(ssid)+sizeof(password), ok);
+  EEPROM.put(addr, ok);
+
   EEPROM.commit();
   EEPROM.end();
+
 }
