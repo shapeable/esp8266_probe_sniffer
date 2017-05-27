@@ -14,8 +14,9 @@ extern "C" {
 /*#include "index_html.h"
 #include "l_svg.h"*/
 
-
-SSD1306  display(0x3c, D5, D6);
+/* ================================
+  Constant Definitions
+=================================*/
 
 #define DATA_LENGTH           112
 
@@ -27,7 +28,11 @@ SSD1306  display(0x3c, D5, D6);
 
 #define STATE0_DURATION 10000
 #define STATE2_DURATION  5000
-typedef void (*Screen)(void);
+
+
+/*=====================================================
+  Start of Global Data section
+=====================================================*/
 
 struct RxControl {
  signed rssi:8; // signal intensity of packet
@@ -97,16 +102,19 @@ volatile byte interrupt2Counter = 0;
 const int interrupt2Pin = D2;
 ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
+typedef void (*Screen)(void);
+SSD1306  display(0x3c, D5, D6);
 int screenState = 0;
 int counter = 1;
 long timeOfLastModeSwitch = 0;
 
-//const byte DNS_PORT = 53;  //THESE WERE BREAKING IT ???
-//IPAddress apIP(192, 168, 1, 1);
-//DNSServer dnsServer;
-//ESP8266WebServer webServer(80);
+/*=====================================================
+  End of Global Data section
+=====================================================*/
 
-
+/*=====================================================
+  Probe request sniffer
+=====================================================*/
 static void showMetadata(SnifferPacket *snifferPacket) {
 
   unsigned int frameControl = ((unsigned int)snifferPacket->data[1] << 8) + snifferPacket->data[0];
@@ -126,7 +134,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   if(SSID_length == 0){
       return;
   }
-
 
   String SSIDcurrent = getSSID(26, SSID_length, snifferPacket->data);
   printf("%s, ", SSIDcurrent.c_str());
@@ -173,9 +180,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   }
 
   //Sorting logic
-
-  //sort(SSIDlist, SSIDlist[].uniques)
-
   struct SSID SSIDswap;
 
   for ( i = 1 ; i < SSIDcount - 1 ; i++){
@@ -203,9 +207,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
 
 }
 
-/**
- * Callback for promiscuous mode
- */
 static void ICACHE_FLASH_ATTR sniffer_callback(uint8_t *buffer, uint16_t length) {
     struct SnifferPacket *snifferPacket = (struct SnifferPacket*) buffer;
     showMetadata(snifferPacket);
@@ -228,6 +229,10 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
     return MAC;
 }
 
+/*=====================================================
+  End of Probe Request Sniffer
+=====================================================*/
+
 /*static void hexDump(uint8_t* data){
     int j = 0;
     printf("000%02x  ", j);
@@ -244,6 +249,10 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
         }
     }
 }*/
+
+/*=====================================================
+  Screen states
+=====================================================*/
 
 String scan = "Scanning.";
 static void ICACHE_FLASH_ATTR displayScanning() {
@@ -324,6 +333,9 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.drawString(64, 30, "Credentials Captured:");
   display.drawString(64, 45, String(capturecount));
 }
+/*=====================================================
+  End of Screen states
+=====================================================*/
 
 /*static void ICACHE_FLASH_ATTR handleInterrupt() {
   interruptCounter++;
@@ -336,9 +348,10 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
 #define CHANNEL_HOP_INTERVAL_MS   1000
 static os_timer_t channelHop_timer;
 
-/**
- * Callback for channel hoping
- */
+/*=====================================================
+  Channel hopping callback
+=====================================================*/
+
 void channelHop()
 {
     // hoping channels 1-14
@@ -347,6 +360,10 @@ void channelHop()
         new_channel = 1;
     wifi_set_channel(new_channel);
 }
+
+/*=====================================================
+  Setup function
+=====================================================*/
 
 #define DISABLE 0
 #define ENABLE  1
@@ -401,6 +418,11 @@ void setup() {
     }
 }
 
+
+/*=====================================================
+  Main Loop
+=====================================================*/
+
 void loop() {
 
   updownButton.Update();
@@ -428,7 +450,7 @@ void loop() {
     os_timer_disarm(&channelHop_timer);
   }
 
-  if(updownButton.clicks >= 1 && screenState == 1){
+  if(updownButton.clicks == 1 && screenState == 1){
     Serial.println("button clicked");
     numberOfInterrupts2++;
   }
@@ -437,19 +459,23 @@ void loop() {
     numberOfInterrupts2 = 0;
   }
 
-  if(selectButton.clicks >= 1 && screenState == 1){
+  if(selectButton.clicks == 1 && screenState == 1){
+      interruptCounter++;
+  }
 
+  if (interruptCounter == 1){
+      interruptCounter--;
       numberOfInterrupts++;
-
       //detachInterrupt(interruptPin);
       //detachInterrupt(interrupt2Pin);
-
       Serial.print("An interrupt has occurred. Total: ");
       Serial.println(numberOfInterrupts);
 
       screenState = 2;
       timeOfLastModeSwitch = millis();
       counter = 0;
+
+      yield();
 
       captiveSetup();
 
@@ -460,16 +486,12 @@ void loop() {
   }
 
   if ((millis() - timeOfLastModeSwitch > STATE2_DURATION) && numberOfInterrupts > 0) {
-
-    screenState = 3;
-    timeOfLastModeSwitch = millis();
-
+      screenState = 3;
+      timeOfLastModeSwitch = millis();
   }
 
   if(numberOfInterrupts > 0){
-
       captiveLoop();
-
   }
 
   counter++;

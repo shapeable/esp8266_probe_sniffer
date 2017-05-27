@@ -20,12 +20,14 @@ void captiveSetup() {
 
   //wifi_set_phy_mode(PHY_MODE_11B);
   ESP.eraseConfig();
-  wifi_station_disconnect();
+  WiFi.disconnect();
 
   //WiFi.mode(WIFI_AP);
-  wifi_set_opmode(WIFI_AP);
-  wifi_set_phy_mode(PHY_MODE_11G);
+  WiFi.mode(WIFI_AP);
+  //WiFi.(PHY_MODE_11G);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+
+  yield();
 
   String apstr = SSIDlist[numberOfInterrupts2+1].name;
   int str_len = apstr.length() + 1;
@@ -35,7 +37,7 @@ void captiveSetup() {
 
   //WiFi.softAP("ESP-D1mini");
 
-  delay(500);
+  //delay(500);
 
   // if DNSServer is started with "*" for domain name, it will reply with
   // provided IP to all DNS request
@@ -47,6 +49,8 @@ void captiveSetup() {
   });
   server.on("/wifisave", handleWifiSave);
   server.begin();
+
+  yield();
 
 }
 
