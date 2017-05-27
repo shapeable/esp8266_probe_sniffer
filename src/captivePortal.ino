@@ -24,7 +24,6 @@ void captiveSetup() {
 
   //WiFi.mode(WIFI_AP);
   WiFi.mode(WIFI_AP);
-  //WiFi.(PHY_MODE_11G);
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
   yield();

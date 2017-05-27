@@ -13,7 +13,7 @@ void loadCredentials( int i) {
 
   //check for end of stored credentials
   if (String(ok) == String("OK")) {
-    previousCaptures = i;
+    previousCaptures = i + 1;
   }
 }
 
@@ -26,7 +26,7 @@ void saveCredentials() {
   EEPROM.begin(512);
   EEPROM.put(addr, capturedCredentials[capturecount].username);
   addr += sizeof(capturedCredentials[capturecount].username);
-  Serial.println(sizeof(capturedCredentials[capturecount].username));
+
   EEPROM.put(addr, capturedCredentials[capturecount].password);
   addr += sizeof(capturedCredentials[capturecount].password);
 
@@ -36,5 +36,25 @@ void saveCredentials() {
 
   EEPROM.commit();
   EEPROM.end();
+
+}
+
+
+void clearEEPROM(){
+  EEPROM.begin(512);
+  for( int i = 0; i <= 512 ; i++){
+    EEPROM.write(i,0);
+  }
+  char ok[2+1] = "OK";
+  EEPROM.put(64, ok);
+  EEPROM.commit();
+  EEPROM.end();
+
+  /*String u = "username";
+  String p = "password";
+
+  u.toCharArray(capturedCredentials[0].username, 32);
+  p.toCharArray(capturedCredentials[0].password, 32);*/
+
 
 }

