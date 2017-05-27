@@ -12,15 +12,17 @@ Currently, the main changes/additions include:
 * an SSD1306 i2c screen to display SSIDs of captured probe requests
 * structures for organizing SSID and MAC address data
 * logic for identifying news SSIDs and unique probe requests
-* logic for sorting SSIDs by # of unique requests
+* logic for sorting SSIDs by # of unique requests and average RSSIs
 * captive portal with logon form  
 * clickButton library for debouncing interrupts
 * disable buttons after selection of SSID
-* turn off channel hoping before setting up as AP
-* moved captive portal to separate ino file
+* turn off channel hopping before setting up as AP
+* moved captive portal setup and loop to separate ino file
 * captured credentials saved to EEPROM and dumped over serial on reset
-* ability to clear EEPROM every reset by uncommenting one line
+* ability to clear EEPROM on reset by uncommenting one line (or on button combination?)
 * screen timeouts (deep sleep after X seconds of inactivity) on SSID list and captive portal screens
+* asynchronous web server for captive portal
+* full website stored in SPIFFS
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.

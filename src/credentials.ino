@@ -1,5 +1,10 @@
 /** Load WLAN credentials from EEPROM */
+
 void loadCredentials( int i) {
+
+  if( addr >= 512 ){
+    addr = 0;
+  }
 
   EEPROM.begin(512);
 
@@ -19,6 +24,10 @@ void loadCredentials( int i) {
 
 /** Store WLAN credentials to EEPROM */
 void saveCredentials() {
+
+  if( addr >= 512 ){
+    addr = 0;
+  }
 
   Serial.println(capturedCredentials[capturecount].username);
   Serial.println(capturedCredentials[capturecount].password);
@@ -49,12 +58,5 @@ void clearEEPROM(){
   EEPROM.put(64, ok);
   EEPROM.commit();
   EEPROM.end();
-
-  /*String u = "username";
-  String p = "password";
-
-  u.toCharArray(capturedCredentials[0].username, 32);
-  p.toCharArray(capturedCredentials[0].password, 32);*/
-
 
 }

@@ -7,9 +7,13 @@ extern "C" {
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
 #include <ClickButton.h>
 #include <WiFiClient.h>
-#include <ESP8266WebServer.h>
+//#include <ESP8266WebServer.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
+#include <Hash.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <SPIFFSEditor.h>
 
 /*#include "index_html.h"
 #include "l_svg.h"*/
@@ -188,7 +192,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
 
   for ( i = 1 ; i < SSIDcount - 1 ; i++){
       for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
-        if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
+        if(SSIDlist[j].average_rssi < SSIDlist[j+1].average_rssi){
             SSIDswap = SSIDlist[j];
             SSIDlist[j] = SSIDlist[j+1];
             SSIDlist[j+1] = SSIDswap;
@@ -198,15 +202,13 @@ static void showMetadata(SnifferPacket *snifferPacket) {
 
   for ( i = 1 ; i < SSIDcount - 1 ; i++){
       for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
-        if(SSIDlist[j].average_rssi < SSIDlist[j+1].average_rssi){
+        if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
             SSIDswap = SSIDlist[j];
             SSIDlist[j] = SSIDlist[j+1];
             SSIDlist[j+1] = SSIDswap;
         }
       }
   }
-
-  //Serial.print(snifferPacket->rx_ctrl.rssi, HEX);
 
   //Perform hex dump of captured packet to serial
   //hexDump(snifferPacket->data);
@@ -524,7 +526,7 @@ void loop() {
 
       yield();
 
-      captiveSetup();
+      asyncCaptiveSetup();
 
       Serial.print("Setting AP for ");
       Serial.print(SSIDlist[numberOfInterrupts2+1].name);
