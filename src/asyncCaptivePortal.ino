@@ -10,7 +10,7 @@ void asyncCaptiveSetup(){
   WiFi.mode(WIFI_AP);
   //WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
-  String apstr = SSIDlist[numberOfInterrupts2+1].name;
+  String apstr = SSIDlist[numberOfInterrupts2].name;
   int str_len = apstr.length() + 1;
   char ap[str_len];
   apstr.toCharArray(ap, str_len);

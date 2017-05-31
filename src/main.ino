@@ -140,6 +140,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
       return;
   }
 
+  // Save SSID and client MAC address of current probe request
   String SSIDcurrent = getSSID(26, SSID_length, snifferPacket->data);
   printf("%s, ", SSIDcurrent.c_str());
 
@@ -152,25 +153,28 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   int trig = 0;
   int i = 0;
   int j = 0;
-  for ( i = 0 ; i <= SSIDcount ; i++){
+
+  for ( i = 0 ; i < SSIDcount ; i++){
       if(SSIDcurrent == SSIDlist[i].name){
           trig++;
           match = i;
       }
   }
+
   if (trig == 0){
     //Limit to 10 SSIDs
     if (SSIDcount > 9){
         return;
     }
     SSIDcount++;
-    match = SSIDcount;
-    SSIDlist[SSIDcount].name = SSIDcurrent;
+    match = SSIDcount-1;
+    SSIDlist[match].name = SSIDcurrent;
     SSIDlist[match].average_rssi = snifferPacket->rx_ctrl.rssi;
   }
+
   int matchMAC = 0;
   trig = 0;
-  for ( j = 0 ; j <= SSIDlist[match].uniques ; j++){
+  for ( j = 0 ; j < SSIDlist[match].uniques ; j++){
       if(MACcurrent == SSIDlist[match].MAClist[j]){
           trig++;
           matchMAC = j;
@@ -184,30 +188,8 @@ static void showMetadata(SnifferPacket *snifferPacket) {
         return;
     }
     SSIDlist[match].uniques++;
-    SSIDlist[match].MAClist[SSIDlist[match].uniques] = MACcurrent;
-  }
-
-  //Sorting logic
-  struct SSID SSIDswap;
-
-  for ( i = 1 ; i < SSIDcount - 1 ; i++){
-      for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
-        if(SSIDlist[j].average_rssi < SSIDlist[j+1].average_rssi){
-            SSIDswap = SSIDlist[j];
-            SSIDlist[j] = SSIDlist[j+1];
-            SSIDlist[j+1] = SSIDswap;
-        }
-      }
-  }
-
-  for ( i = 1 ; i < SSIDcount - 1 ; i++){
-      for ( j = 1 ; j < SSIDcount - i - 1 ; j++){
-        if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
-            SSIDswap = SSIDlist[j];
-            SSIDlist[j] = SSIDlist[j+1];
-            SSIDlist[j+1] = SSIDswap;
-        }
-      }
+    matchMAC = SSIDlist[match].uniques - 1;
+    SSIDlist[match].MAClist[matchMAC] = MACcurrent;
   }
 
   //Perform hex dump of captured packet to serial
@@ -243,6 +225,32 @@ static String getMAC(char *addr, uint8_t* data, uint16_t offset) {
                     data[offset+2], data[offset+3], data[offset+4], data[offset+5]);
     String MAC(addr);
     return MAC;
+}
+
+//Sorting logic
+void SSIDsort(){
+  struct SSID SSIDswap;
+  int i, j;
+
+  for ( i = 0 ; i < SSIDcount - 1 ; i++){
+      for ( j = 0 ; j < SSIDcount - i - 1 ; j++){
+        if(SSIDlist[j].average_rssi < SSIDlist[j+1].average_rssi){
+            SSIDswap = SSIDlist[j];
+            SSIDlist[j] = SSIDlist[j+1];
+            SSIDlist[j+1] = SSIDswap;
+        }
+      }
+  }
+
+  for ( i = 0 ; i < SSIDcount - 1 ; i++){
+      for ( j = 0 ; j < SSIDcount - i - 1 ; j++){
+        if(SSIDlist[j].uniques < SSIDlist[j+1].uniques){
+            SSIDswap = SSIDlist[j];
+            SSIDlist[j] = SSIDlist[j+1];
+            SSIDlist[j+1] = SSIDswap;
+        }
+      }
+  }
 }
 
 /*=====================================================
@@ -295,32 +303,34 @@ static void ICACHE_FLASH_ATTR displayScanning() {
 }
 
 static void ICACHE_FLASH_ATTR displaySSIDs() {
+  // setup table
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 0, "SSID");
   display.drawString(90, 0, "uniques");
-  String ap;
 
-  if (numberOfInterrupts2 <= 4){
-    for ( int i = 1 ; i <= 5 && i <= SSIDcount ; i++){
+  String ap; //temporary storage for SSID
+
+  if (numberOfInterrupts2 < 5){
+    for ( int i = 0 ; i < 5 && i < SSIDcount-1 ; i++){
         display.drawRect(0, (numberOfInterrupts2+1)*10, 80, 12);
         ap = SSIDlist[i].name;
         if (ap.length() > 12){
             ap.remove(12, 20);
             ap += "...";
         }
-        display.drawString(0, i*10, ap);
-        display.drawString(90, i*10, String(SSIDlist[i].uniques));
+        display.drawString(0, (i+1)*10, ap);
+        display.drawString(90, (i+1)*10, String(SSIDlist[i].uniques));
     }
   }else{
-    for ( int i = 1 ; i <= 5 && i <= SSIDcount-(4-i) ; i++){
+    for ( int i = 0 ; i < 5 && i < SSIDcount+i-5 ; i++){
         display.drawRect(0, 50, 80, 12);
-        ap = SSIDlist[i+numberOfInterrupts2-4].name;
+        ap = SSIDlist[numberOfInterrupts2+i-4].name;
         if (ap.length() > 12){
             ap.remove(12, 20);
             ap += "...";
         }
-        display.drawString(0, i*10, ap);
-        display.drawString(90, i*10, String(SSIDlist[i+numberOfInterrupts2-4].uniques));
+        display.drawString(0, (i+1)*10, ap);
+        display.drawString(90, (i+1)*10, String(SSIDlist[numberOfInterrupts2+i-4].uniques));
     }
   }
 }
@@ -334,7 +344,7 @@ static void ICACHE_FLASH_ATTR displayAPsetup() {
   display.setTextAlignment(TEXT_ALIGN_CENTER);
 
   display.drawString(64, 15, "Setting up");
-  display.drawString(64, 30, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
+  display.drawString(64, 30, SSIDlist[numberOfInterrupts2].name + " Access Point");
   if (millis() - timeOfLastModeSwitch < 2700){
       display.drawProgressBar(32, 48, 60, 12, progress);
   }else{
@@ -345,7 +355,7 @@ static void ICACHE_FLASH_ATTR displayAPsetup() {
 static void ICACHE_FLASH_ATTR displayKEYcapture(){
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64, 0, "Captive portal on");
-  display.drawString(64, 15, SSIDlist[numberOfInterrupts2+1].name + " Access Point");
+  display.drawString(64, 15, SSIDlist[numberOfInterrupts2].name + " Access Point");
   display.drawString(64, 30, "Credentials Captured:");
   display.drawString(64, 45, String(capturecount));
 }
@@ -407,8 +417,8 @@ void setup() {
     pinMode(interruptPin, INPUT_PULLUP);
     //attachInterrupt(interruptPin, handleInterrupt, FALLING);
     pinMode(interrupt2Pin, INPUT_PULLUP);
-    selectButton.debounceTime = 100;
-    updownButton.debounceTime = 100;
+    selectButton.debounceTime = 30;
+    updownButton.debounceTime = 30;
     selectButton.multiclickTime = 0;
     updownButton.multiclickTime = 0;
     //attachInterrupt(interrupt2Pin, handleInterrupt2, FALLING);
@@ -431,8 +441,10 @@ void setup() {
     display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
 
-    //clearEEPROM(); //uncomment to clear stored credentials
-
+    //selectButton.Update();
+    //if (selectButton.clicks >= 1){
+        //clearEEPROM(); //uncomment to clear stored credentials
+    //}
     // Dump previously captured credentials
     Serial.println();
     Serial.println("Recovered credentials:");
@@ -444,6 +456,13 @@ void setup() {
       Serial.println();
       i++;
     }
+
+    /*for( int i = 0 ; i <= 10 ; i++){
+      SSIDlist[i].name = "test"+ String(i);
+      SSIDcount++;
+    }
+
+    return;*/
 
 }
 
@@ -482,6 +501,8 @@ void loop() {
   if(screenState == 0){
     if ((millis() - timeOfLastModeSwitch > STATE0_DURATION)) {
 
+      SSIDsort();
+
       screenState = 1;
       timeOfLastModeSwitch = millis();
       timeOfLastClick = millis();
@@ -505,7 +526,7 @@ void loop() {
     }
 
     // Go back to top of list
-    if(numberOfInterrupts2 >= SSIDcount){
+    if(numberOfInterrupts2 == SSIDcount){
       numberOfInterrupts2 = 0;
     }
 
