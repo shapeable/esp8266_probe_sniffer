@@ -82,6 +82,7 @@ struct SSID{
 struct SSID SSIDlist[10];
 
 int SSIDcount = 0;
+int probeCount = 0;
 int capturecount = 0;
 
 struct credentials{
@@ -148,6 +149,11 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   String MACcurrent = getMAC(addr, snifferPacket->data, 10);
   printf("%s, ", MACcurrent.c_str());
 
+  Serial.println(probeCount);
+
+  // LED blink on probe request
+  digitalWrite(LEDpin, LOW);
+
   //Matching logic, convert to function
   int match = 0;
   int trig = 0;
@@ -162,6 +168,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   }
 
   if (trig == 0){
+    probeCount++;
     //Limit to 10 SSIDs
     if (SSIDcount > 9){
         return;
@@ -194,14 +201,6 @@ static void showMetadata(SnifferPacket *snifferPacket) {
 
   //Perform hex dump of captured packet to serial
   //hexDump(snifferPacket->data);
-
-  printf("%d, ", SSIDlist[match].uniques);
-  printf("%d, ", match);
-  printf("%d\n", SSIDcount);
-
-  // LED blink on probe request
-  digitalWrite(LEDpin, LOW);
-
 
 }
 
@@ -311,7 +310,7 @@ static void ICACHE_FLASH_ATTR displaySSIDs() {
   String ap; //temporary storage for SSID
 
   if (numberOfInterrupts2 < 5){
-    for ( int i = 0 ; i < 5 && i < SSIDcount-1 ; i++){
+    for ( int i = 0 ; i < 5 && i < SSIDcount; i++){
         display.drawRect(0, (numberOfInterrupts2+1)*10, 80, 12);
         ap = SSIDlist[i].name;
         if (ap.length() > 12){
@@ -533,8 +532,8 @@ void loop() {
     // Handle selection interrupt
     if(selectButton.clicks == 1){
         interruptCounter++;
+      }
     }
-  }
 
   // Setup captive portal
   if (interruptCounter == 1){
@@ -548,10 +547,6 @@ void loop() {
       yield();
 
       asyncCaptiveSetup();
-
-      Serial.print("Setting AP for ");
-      Serial.print(SSIDlist[numberOfInterrupts2+1].name);
-      Serial.print("...");
 
   }
 
