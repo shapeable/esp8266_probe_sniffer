@@ -5,7 +5,6 @@ This repository is heavily derived from the following examples:
 * https://github.com/squix78/esp8266-oled-ssd1306/ 
 * https://github.com/esp8266/Arduino/tree/master/libraries/DNSServer
 
-
 Currently, the main changes/additions include:  
 * Rejection of broadcast probes (considered uninteresting)  
 * hexDump function to view captured packets  
@@ -23,6 +22,16 @@ Currently, the main changes/additions include:
 * screen timeouts (deep sleep after X seconds of inactivity) on SSID list and captive portal screens
 * asynchronous web server for captive portal
 * full website stored in SPIFFS
+
+# Dependencies
+* platformio-core (install with ```sudo pip install platformio```)
+* all other dependecies are taken care of by the ```platformio.ini``` file
+
+# To flash this firmware:
+1. clone this repository
+2. connect ESP8266 board to computer with micro USB cable
+3. cd into the cloned repository and run following command from terminal ```pio run -t upload```
+4. if this does not work try specifying the USB device like so ```pio run -t upload --upload-port /dev/ttyUSB0``` or whatever port your USB device defaulted to.
 
 # From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.
