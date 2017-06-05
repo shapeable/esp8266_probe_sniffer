@@ -1,6 +1,7 @@
 # ESP8266 Probe Sniffer
 
 ## Dependencies
+* python and pip (required by platformio)
 * platformio-core (install with ```sudo pip install platformio```)
 * all other dependecies are taken care of by the ```platformio.ini``` file
 
@@ -8,8 +9,8 @@
 1. clone this repository
 2. connect ESP8266 board to computer with micro USB cable
 3. cd into the cloned repository 
-4. run the following to upload the SPIFFs files, ```pio run -t uploadfs```
-5. run following command from terminal ```pio run -t upload```
+4. run following command to upload the SPIFFs files, ```pio run -t uploadfs```
+5. run following command to upload firmware ```pio run -t upload```
 6. if either of these do not work try specifying the USB device like so ```pio run -t upload --upload-port /dev/ttyUSB0``` or whatever port your USB device defaulted to.
 
 ## Active working log
