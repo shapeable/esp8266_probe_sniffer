@@ -1,5 +1,18 @@
 # ESP8266 Probe Sniffer
 
+## Dependencies
+* platformio-core (install with ```sudo pip install platformio```)
+* all other dependecies are taken care of by the ```platformio.ini``` file
+
+## To flash this firmware
+1. clone this repository
+2. connect ESP8266 board to computer with micro USB cable
+3. cd into the cloned repository 
+4. run the following to upload the SPIFFs files, ```pio run -t uploadfs```
+5. run following command from terminal ```pio run -t upload```
+6. if either of these do not work try specifying the USB device like so ```pio run -t upload --upload-port /dev/ttyUSB0``` or whatever port your USB device defaulted to.
+
+## Active working log
 This repository is heavily derived from the following examples:  
 * http://github.com/kalanda/esp8266-sniffer
 * https://github.com/squix78/esp8266-oled-ssd1306/ 
@@ -23,17 +36,7 @@ Currently, the main changes/additions include:
 * asynchronous web server for captive portal
 * full website stored in SPIFFS
 
-# Dependencies
-* platformio-core (install with ```sudo pip install platformio```)
-* all other dependecies are taken care of by the ```platformio.ini``` file
-
-# To flash this firmware:
-1. clone this repository
-2. connect ESP8266 board to computer with micro USB cable
-3. cd into the cloned repository and run following command from terminal ```pio run -t upload```
-4. if this does not work try specifying the USB device like so ```pio run -t upload --upload-port /dev/ttyUSB0``` or whatever port your USB device defaulted to.
-
-# From original repo
+## From original repo
 This is only an easy experiment which uses the ESP8266 wifi module to look for near smartphones around you. You can do this very easily with any computer and some software but this is a good way to learn the possibilities of these tiny ESP8266 modules.
 
 **VERY IMPORTANT:** *This code is only for educational purposes. We don’t want to listen for any private communication and we don't do it. All packets that you can listen with this code are public packets without any encryption or secure layer on it, continuously broadcasted to the air by smartphones. Please, check which country's laws applies to you before use this code.*
@@ -45,14 +48,6 @@ Some time ago I saw this [video](https://youtu.be/DbqkBAjId_U?t=405) of *Chema A
 Those public packets are named as "probe requests" and are used by smartphones to connect faster to wifi networks than if it waits for the network send a Beacon frame to announce the SSID.
 
 This program just listen for those "probe requests" and prints to serial port the information. For now only shows the RSSI (bigger values are near devices), the MAC address of the device and the SSID (if available) of the wifi network which is looking for. Something like that:
-
-![](doc/capture.jpg)
-
-## Code  
-
-This repository uses [Platformio](http://platformio.org/platformio-ide) to compile and upload code to ESP8266 but you can also use it with [Arduino IDE](https://github.com/esp8266/Arduino#installing-with-boards-manager).
-
-I use one [nodeMCU devkit](https://github.com/nodemcu/nodemcu-devkit) because is a fast and easy way to program the chip because it includes serial to usb converter and breadboard compatibility but there are [many flavors](http://www.esp8266.com/wiki/doku.php?id=esp8266-module-family) available.
 
 ## Useful links
 
