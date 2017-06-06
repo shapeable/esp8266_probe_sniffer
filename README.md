@@ -1,11 +1,22 @@
 # ESP8266 Probe Sniffer
 
+## To flash firmware using binaries and esptool
+Open a terminal inside the firmware directory and run the following commands:
+```
+./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -cf firmware.bin  
+./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -ca 0x300000 -cf spiffs.bin  
+```
+If either of these do not work make sure you specify the corrent USB device.
+
+
+
+# For development with PlatformIO
 ## Dependencies
 * python and pip (required by platformio)
 * platformio-core (install with ```sudo pip install platformio```)
 * all other dependecies are taken care of by the ```platformio.ini``` file
 
-## To flash this firmware
+## To flash this firmware using PlatformIO
 1. clone this repository
 2. connect ESP8266 board to computer with micro USB cable
 3. cd into the cloned repository 

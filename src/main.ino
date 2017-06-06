@@ -439,7 +439,7 @@ void setup() {
     display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
 
-    //clearEEPROM(); //uncomment to clear stored credentials
+    clearEEPROM(); //uncomment to clear stored credentials
 
     Serial.println();
     Serial.println("Recovered credentials:");
@@ -479,6 +479,10 @@ void loop() {
     Serial.println(timeOfLastClick);
   }
 
+  /*if (selectButton.clicks == 1){
+    ESP.reset()
+  }*/
+
   //enter admin menu
   /*if(updownButton.clicks == 1 && selectButton.clicks == 1){
     //timeOfLastClick = millis();
@@ -498,7 +502,24 @@ void loop() {
 
   // Clear screen and enter deep sleep
   if(screenState == 5){
-      ESP.deepSleep(0);
+      //ESP.deepSleep(0);
+      //WiFi.mode(WIFI_STA);
+      wifi_station_disconnect();
+      wifi_set_opmode(NULL_MODE);          // set WiFi mode to null mode.
+      wifi_fpm_set_sleep_type(LIGHT_SLEEP_T);      // light sleep
+      wifi_fpm_open();
+      WiFi.forceSleepBegin();
+      while(screenState == 5){
+        selectButton.Update();
+        if (selectButton.clicks == 1){
+          WiFi.forceSleepWake();
+          Serial.println("escape");
+          timeOfLastModeSwitch = millis();
+          screenState=0;
+          //ESP.reset();
+        }
+        delay(100);
+      }
   }
 
   if(screenState ==0){
