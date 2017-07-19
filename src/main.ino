@@ -93,7 +93,7 @@ int previousCaptures = 0;
 
 struct credentials capturedCredentials[100];
 
-const int LEDpin = 2; //GPIO2 D0?, different on each board? use GPIO13 in final
+const int LEDpin[] = { 13, 15, 16, 2, 0 }; //GPIO2 D0?, different on each board? use GPIO13 in final
 
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
@@ -108,7 +108,7 @@ ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 long timeOfLastClick = 0;
 
 typedef void (*Screen)(void);
-SSD1306  display(0x3c, 14, 12); //GPIO14 12 D5, D6
+SSD1306  display(0x3c, 12, 14); //GPIO14 12 D5, D6
 int screenState = 0;
 long timeOfLastModeSwitch = 0;
 
@@ -150,7 +150,7 @@ static void showMetadata(SnifferPacket *snifferPacket) {
   Serial.println(probeCount);
 
   // LED blink on probe request
-  digitalWrite(LEDpin, LOW);
+  digitalWrite(LEDpin[0], LOW);
 
   //Matching logic, convert to function
   int match = 0;
@@ -356,14 +356,14 @@ static void ICACHE_FLASH_ATTR displayTimeout(){
   display.clear();
 }
 
-static void ICACHE_FLASH_ATTR displayAdmin(){
+/*static void ICACHE_FLASH_ATTR displayAdmin(){
   display.setTextAlignment(TEXT_ALIGN_CENTER);
   display.drawString(64, 0, "You are now sudoed");
   display.drawString(64, 10, "Clear EEPROM");
   display.drawString(64, 20, "Set Timeout");
   //display.drawString(64, 10, "View Credentials");
   display.drawRect(15, (numberOfInterrupts2+1)*10, 94, 12);
-}
+}*/
 
 static void ICACHE_FLASH_ATTR screenTimeout( long timeout ){
   if(millis() - timeOfLastModeSwitch > timeout){
@@ -413,16 +413,21 @@ void channelHop()
 #define DISABLE 0
 #define ENABLE  1
 
-Screen screens[] = { displayLogo, displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture, displayTimeout, displayAdmin};
+Screen screens[] = { displayLogo, displayScanning, displaySSIDs, displayAPsetup, displayKEYcapture, displayTimeout };
 //int demoLength = (sizeof(screens) / sizeof(Screen));
 
 void setup() {
 
     //Start serial connection
     Serial.begin(115200);
-
-    pinMode(LEDpin, OUTPUT);
-    digitalWrite(LEDpin, HIGH);
+    for( int i = 0 ; i <= 5 ; i++ ){
+      pinMode(LEDpin[i], OUTPUT);
+      if(i < 3 ){ // default LEDs to off
+        digitalWrite(LEDpin[i], LOW);
+      }else{
+        digitalWrite(LEDpin[i], HIGH);
+      }
+    }
     // setup interrupt pins
     pinMode(interruptPin, INPUT_PULLUP);
     //attachInterrupt(interruptPin, handleInterrupt, FALLING);
@@ -502,7 +507,7 @@ void loop() {
     }
   }*/
 
-  // Clear screen and enter deep sleep
+  // Clear screen and enter light sleep
   if(screenState == 5){
       //ESP.deepSleep(0);
       //Enter light sleep mode
@@ -571,7 +576,12 @@ void loop() {
 
     // Handle selection interrupt
     if(selectButton.clicks == 1){
-        interruptCounter++;
+        if (SSIDcount == 0) {
+          ESP.reset();
+        }
+        else{
+          interruptCounter++;
+        }
       }
     }
 
@@ -607,6 +617,6 @@ void loop() {
 
   }
 
-  digitalWrite(LEDpin, HIGH);
+  digitalWrite(LEDpin[0], HIGH);
 
 }
