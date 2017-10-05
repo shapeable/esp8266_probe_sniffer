@@ -1,10 +1,15 @@
 # ESP8266 Probe Sniffer
 
 ## To flash firmware using binaries and esptool
-Clone this repository on a Ubuntu/Debian Linux machine, open a terminal inside the firmware directory, and run the following commands:
+1) Connect a Micro-USB cable to the conference badge
+2) Clone this repository on a Ubuntu/Debian Linux machine
+3) Go to the `firmware` directory of this repo.
+4) Install esptool by running `sudo apt-get install esptool`
+5) Run the following commands:
+
 ```
-./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -cf firmware.bin  
-./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -ca 0x00300000 -cf spiffs.bin  
+sudo esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -ca 0x00300000 -cf spiffs.bin
+sudo esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -cf firmware.bin  
 ```
 If either of these do not work make sure you specify the correct USB device.
 
