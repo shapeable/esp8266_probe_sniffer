@@ -4,7 +4,7 @@
 Clone this repository on a Ubuntu/Debian Linux machine, open a terminal inside the firmware directory, and run the following commands:
 ```
 ./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -cf firmware.bin  
-./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -ca 0x300000 -cf spiffs.bin  
+./esptool -vv -cd nodemcu -cb 115200 -cp "/dev/ttyUSB0" -ca 0x00300000 -cf spiffs.bin  
 ```
 If either of these do not work make sure you specify the correct USB device.
 
