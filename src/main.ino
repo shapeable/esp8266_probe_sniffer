@@ -97,12 +97,12 @@ const int LEDpin[] = { 13, 15, 16, 2, 0 }; //GPIO2 D0?, different on each board?
 
 int numberOfInterrupts = 0;
 volatile byte interruptCounter = 0;
-const int interruptPin = 5; //GPIO5 D1
+const int interruptPin = 4; //GPIO4 D1
 ClickButton selectButton(interruptPin, LOW, CLICKBTN_PULLUP);
 
 int numberOfInterrupts2 = 0;
 volatile byte interrupt2Counter = 0;
-const int interrupt2Pin = 4; //GPIO4 D2
+const int interrupt2Pin = 5; //GPIO5 D2
 ClickButton updownButton(interrupt2Pin, LOW, CLICKBTN_PULLUP);
 
 long timeOfLastClick = 0;
@@ -290,7 +290,6 @@ static void ICACHE_FLASH_ATTR displayScanning() {
   display.drawProgressBar(0, 32, 120, 10, progress);
 
   display.setTextAlignment(TEXT_ALIGN_LEFT);
-
   display.drawString(41, 5, scan);
 }
 
@@ -453,7 +452,6 @@ void setup() {
 
     // Initialising the UI will init the display too.
     display.init();
-    display.flipScreenVertically();
     display.setFont(ArialMT_Plain_10);
 
     clearEEPROM(); //uncomment to clear stored credentials
@@ -469,13 +467,14 @@ void loop() {
 
   updownButton.Update();
   selectButton.Update();
+  
 
   // clear the display
   display.clear();
-
   // draw the current Screen method
   screens[screenState]();
 
+ 
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.drawString(10, 128, String(millis()));
   // write the buffer to the display
@@ -617,6 +616,5 @@ void loop() {
 
   }
 
-  digitalWrite(LEDpin[0], HIGH);
-
+  digitalWrite(LEDpin[0], LOW);
 }
